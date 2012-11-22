@@ -45,29 +45,29 @@ type CancelReply struct {
     Status int
 }
 
-type DeleteFlightArgs struct {
+type DeleteArgs struct {
     FlightID string
 }
 
-type DeleteFlightReply struct {
+type DeleteReply struct {
     Status int
     CustomerEmails []string
 }
 
-type RescheduleFlightArgs struct {
+type RescheduleArgs struct {
     OldFlightID string
     NewFlight FlightStruct
 }
 
-type RescheduleFlightReply struct {
+type RescheduleReply struct {
     Status int
     CustomerEmails []string
 }
 
-type AddFlightArgs struct {
+type AddArgs struct {
     Flight FlightStruct
 }
 
-type AddFlightReply struct {
+type AddReply struct {
     Status int
 }
