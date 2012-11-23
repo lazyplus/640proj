@@ -6,6 +6,7 @@ const (
     ENOFLIGHT
     ENOTICKET
     EFLIGHTEXISTS
+    ENOSEQ
 )
 
 type FlightStruct struct {
@@ -30,26 +31,17 @@ type QueryReply struct {
 type BookArgs struct {
     FlightID string
     Email string
+    Count int
 }
 
 type BookReply struct {
     Status int
-    Ticket int
-}
-
-type CancelArgs struct {
-    FlightID string
-    Email string
-}
-
-type CancelReply struct {
-    Status int
-    Ticket int
+    Seq int
 }
 
 type DecisionArgs struct {
     Decision int
-    Ticket int
+    Seq int
 }
 
 type DecisionReply struct {
