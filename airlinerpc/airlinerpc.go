@@ -4,8 +4,10 @@ import "../airlineproto"
 
 type AirlineServerInterface interface {
     QueryFlights(*airlineproto.QueryArgs, *airlineproto.QueryReply) error
-    BookFlight(*airlineproto.BookArgs, *airlineproto.BookReply) error
-    CancelFlight(*airlineproto.CancelArgs, *airlineproto.CancelReply) error
+    PrepareBookFlight(*airlineproto.BookArgs, *airlineproto.BookReply) error
+    BookDecision(*airlineproto.DecisionArgs, *airlineproto.DecisionReply) error
+    PrepareCancelFlight(*airlineproto.CancelArgs, *airlineproto.CancelReply) error
+    CancelDecision(*airlineproto.DecisionArgs, *airlineproto.DecisionReply) error
     DeleteFlight(*airlineproto.DeleteArgs, *airlineproto.DeleteReply) error
     RescheduleFlight(*airlineproto.RescheduleArgs, *airlineproto.RescheduleReply) error
     AddFlight(*airlineproto.AddArgs, *airlineproto.AddReply) error
@@ -23,12 +25,20 @@ func (asrpc *AirlineServerRPC) QueryFlights(args *airlineproto.QueryArgs, reply 
     return asrpc.as.QueryFlights(args, reply)
 }
 
-func (asrpc *AirlineServerRPC) BookFlight(args *airlineproto.BookArgs, reply *airlineproto.BookReply) error {
+func (asrpc *AirlineServerRPC) PrepareBookFlight(args *airlineproto.BookArgs, reply *airlineproto.BookReply) error {
     return asrpc.as.BookFlight(args, reply)
 }
 
-func (asrpc *AirlineServerRPC) CancelFlight(args *airlineproto.CancelArgs, reply *airlineproto.CancelReply) error {
+func (asrpc *AirlineServerRPC) BookDecision(*airlineproto.DecisionArgs, *airlineproto.DecisionReply) error {
+    return asrpc.as.BookDecision(args, reply)
+}
+
+func (asrpc *AirlineServerRPC) PrepareCancelFlight(args *airlineproto.CancelArgs, reply *airlineproto.CancelReply) error {
     return asrpc.as.CancelFlight(args, reply)
+}
+
+func (asrpc *AirlineServerRPC) CancelDecision(*airlineproto.DecisionArgs, *airlineproto.DecisionReply) error {
+    return asrpc.as.CancelDecision(args, reply)
 }
 
 func (asrpc *AirlineServerRPC) DeleteFlight(args *airlineproto.DeleteArgs, reply *airlineproto.DeleteReply) error {

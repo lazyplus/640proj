@@ -34,6 +34,7 @@ type BookArgs struct {
 
 type BookReply struct {
     Status int
+    Ticket int
 }
 
 type CancelArgs struct {
@@ -42,6 +43,16 @@ type CancelArgs struct {
 }
 
 type CancelReply struct {
+    Status int
+    Ticket int
+}
+
+type DecisionArgs struct {
+    Decision int
+    Ticket int
+}
+
+type DecisionReply struct {
     Status int
 }
 
