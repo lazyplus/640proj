@@ -49,10 +49,11 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 	defer co.map_lock.Unlock()
 	//first round
 	ls := len(args.Flights)
-	wait_ls := List.new()
-	reply_ls := List.new()
-	client_ls := List.new()
-	seq_ls := List.new()
+	id_ls := List.new()
+	wait_ls := make(map[string] *rpc.Call)
+	reply_ls := make(map[string] *airlineproto.BookReply)
+	client_ls := make(map[string] *rpc.Client)
+	
 	for i:=0;i<ls;i++ {
 		ss := strings.Split(args.Flights[i],"::")
 		airline_name = ss[0]
@@ -64,48 +65,45 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 			return err
 		}
 		bookcall := client.Go("asrpc.PrepareBookFlight",args_out, reply,nil)
-		wait_ls.PushBack(bookcall)
-		reply_ls.PushBack(reply)
-		client_ls.PushBack(client)	
+		id_ls.PushBack(ss)
+		wait_ls[ss] = bookcall
+		reply_ls[ss] = reply
+		client_ls[ss] = client	
 	}
-	var shouldCommit int = 1
+	var shouldCommit int = airlineproto.COMMIT
 	var finalstatus int = coordserver.OK
-	rt := reply_ls.Front()
-	for e := wait_ls.Front();e != nil; e=e.Next() {
-		call := e.(*rpc.Call)
+	
+	for e := id_ls.Front();e != nil; e=e.Next() {
+		ss := e.(string)
+		call , _:= wait_ls[ss]
 		reply_call := <- call.Done
-		reply := rt.(*airlineproto.BookReply)
-		rt = rt.Next()
+		reply , _:= reply_ls[ss]
 		if reply.Status != airlineproto.OK {
-			shouldCommit = 0
+			shouldCommit = airlineproto.ABORT
 			finalstatus = reply.Status
 		}
-		seq_ls.PushBack(reply.Seq)
 	}
 	
 	//second phase
-	wait_ls.Init()
-	reply_ls.Init()
-	se := seq_ls.Front()
-	for e:=client_ls.Front();e!=nil;e=e.Next() {
-		client := e.(*rpc.Client)
-		seq := se.(int)
-		se = se.Next()	
-		args_out := &airlineproto.DecisionArgs{shouldCommit,seq}
+	wait_ls = make(map[string] *rpc.Call)
+	reply_ls = make(map[string] *airlineproto.DecisionReply)
+	for e:=id_ls.Front();e!=nil;e=e.Next() {
+		ss := e.(string)
+		client, _ := client_ls[ss]
+		args_out := &airlineproto.DecisionArgs{shouldCommit,ss}
 		reply := &airlineproto.DecisionReply{}
 		decisioncall := client.Go("asrpc.BookDecision", args_out, reply,nil)
-		wait_ls.PushBack(decisioncall)
-		reply_ls.PushBack(reply)
+		wait_ls[ss] = decisioncall
+		reply_ls[ss] = reply
 	}
-	rt = reply.Front()
 	
 	var isSuccess bool = true
 	
-	for e:=wait_ls.Front();e!=nil;e=e.Next(){
-		call := e.(*rpc.Call)
+	for e:=id_ls.Front();e!=nil;e=e.Next(){
+		ss := e.(string)
+		call , _ := wait_ls[ss]
 		reply_call := <- call.Done
-		reply := rt.(&airlineproto.DecisionReply)
-		rt = rt.Next()
+		reply , _ := reply_ls[ss]
 		if reply.Status != airlineproto.OK {
 			isSuccess = false
 			finalstatus = reply.Status
@@ -120,10 +118,10 @@ func (co *coordserver) CancelFlights(args *coordproto.CancelArgs, ori_reply *coo
 	defer co.map_lock.Unlock()
 	
 	ls := len(args.Flights)
-	wait_ls := List.new()
-	reply_ls := List.new()
-	client_ls := List.new()
-	seq_ls := List.new()
+	id_ls := List.new()
+	wait_ls := make(map[string] *rpc.Call)
+	reply_ls := make(map[string] *airlineproto.BookReply)
+	client_ls := make(map[string] *rpc.Client)
 	//assume the input is airline + "::" + ID
 	for i:=0;i<ls;i++ {
 		ss := strings.Split(args.Flights[i])
@@ -137,51 +135,47 @@ func (co *coordserver) CancelFlights(args *coordproto.CancelArgs, ori_reply *coo
 			return err
 		}
 		cancelcall := client.Go("asrpc.repareCancelFlight",args_out,reply,nil)
-		client_ls.PushBack(client)
-		wait_ls.PushBack(cancelcall)
-		reply_ls.PushBack(reply)
+		id_ls.PushBack(ss)
+		client_ls[ss] = client
+		wait_ls[ss] = cancelcall
+		reply_ls[ss] = reply
 	}	
-	var should_commit int = 1
+	var should_commit int = airlineproto.COMMIT
 	var final_status int = coordproto.OK
-	rt := reply.Front()
-	for e:=wait_ls.Front();e!=nil;e=e.Next() {
-		call := e.(*rpc.Call)
+	for e:=id_ls.Front();e!=nil;e=e.Next() {
+		ss := e.(string)
+		call, _ := wait_ls[ss]
 		reply_call := call.Done
-		reply := rt.(*airlineproto.BookReply)
-		rt = rt.Next()
+		reply,_ := reply_ls[ss]
 		if reply.Status != airlineproto.OK {
-			should_commit = 0
+			should_commit = airlineproto.ABORT
 			final_status = reply.Status
 		}
-		seq_ls.PushBack(reply.Seq)
 	}
 	//second phase
-	wait_ls.Init()
-	reply_ls.Init()
+	wait_ls = make(map[string] *rpc.Call)
+	reply_ls = make(map[string] *airlineproto.DecisionReply)
 	var isSuccess bool = true
-	se := seq_ls.
-	for e:=client_ls.Front();e!=nil;e=e.Next {
-		client := e.(*rpc.Client)
-		seq := se.(int)
-		args_out := &airlineproto.DecisionArgs{should_commit,seq}
+	for e:=id_ls.Front();e!=nil;e=e.Next {
+		ss := e.(string)
+		client, _ := client_ls[ss]
+		args_out := &airlineproto.DecisionArgs{should_commit,ss}
 		reply := &airlineproto.DecisionReply{}
 		call := client.Go("asrpc.CancelDecision",args_out,reply)
-		wait_ls.PushBack(call)
-		reply_ls.PushBack(reply)
+		wait_ls[ss] = call
+		reply_ls[ss] = reply
 	}
-	rt := reply.Front()
 	
-	for e:=wait_ls.Front();e!=nil;e=e.Next() {
-		call := e.(*rpc.Call)
+	for e:=id_ls.Front();e!=nil;e=e.Next() {
+		ss := e.(string)
+		call, _ := wait_ls[ss]
 		reply_call := <- call.Done
-		reply := rt.(*airlineproto.DecisionReply)
-		rt = rt.Next()
+		reply, _ := reply_ls[ss]
 		if reply.Status != airlineproto.OK {
 			final_status = reply.Status
 			isSuccess = false
 		}
 	}
 	ori_reply.Status = final_status
-	return nil
-	
+	return nil	
 }
