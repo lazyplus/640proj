@@ -3,6 +3,7 @@ package coordimpl
 import {
 	"../coordproto"
 	"../airlineproto"
+	"../inputFormat"
 	"sync"
 	"os"
 	"bufio"
@@ -12,33 +13,14 @@ import {
 }
 
 type coordserver struct {
-	num_airline 	int
-	addr_airline 	map[string] string
+	airline_info	*inputFormat.input
 	map_lock		sync.Mutex
-	 
 }
 
 func NewCoordinator (path string) *coordserver {
 	co := &coordserver{}
-	co.addr_airline = make(map[string] string)
-	userFile := path
-	fin, err := os.Open(userFile)
-	defer fin.Close()
-	if err != nil{
-		return nil
-	}
-	num := 0
-	rf := bufio.NewReader(fin)
-	for{
-		s, err2 := rf.ReadString('\n')
-		if err2 != nil {
-			break
-		}
-		num++
-		ss := strings.Split(s,"\t")
-		co.addr_airline[ss[0]] = ss[1]
-	}
-	co.num_airline = num
+	co.airline_info = *inputFormat.input{}
+	co.airline_info.read_config_file(path)
 	return co
 }
 
@@ -57,7 +39,7 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 	for i:=0;i<ls;i++ {
 		ss := strings.Split(args.Flights[i],"::")
 		airline_name = ss[0]
-		addr := co.addr_airline[airline_name]
+		addr := co.airline_info.addr_airline[airline_name]
 		args_out := &airlineproto.BookArgs{ss[1],args.Email,args.count}
 		reply := &airlineproto.BookReply{}
 		client, err := rpc.DialHTTP("tcp",addr)
@@ -127,7 +109,7 @@ func (co *coordserver) CancelFlights(args *coordproto.CancelArgs, ori_reply *coo
 		ss := strings.Split(args.Flights[i])
 		airline_name := ss[0]
 		airline_id := ss[1]
-		addr := co.addr_airline[airline_name]
+		addr := co.airline_info.addr_airline[airline_name]
 		args_out := &airlineproto.BookArgs{airline_id,args.Email,args.count}
 		reply := &airlineproto.BookReply{}
 		client, err := rpc.DialHTTP("tcp",addr)
