@@ -12,7 +12,7 @@ import (
     "strconv"
 )
 
-var portnum *int = flag.Int("port", 0, "port # to listen on. nodes default to using an ephemeral port (0).")
+var portnum *int = flag.Int("port", 12340, "port # to listen on. nodes default to using an ephemeral port (0).")
 
 func main() {
     flag.Parse()

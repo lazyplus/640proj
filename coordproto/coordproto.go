@@ -15,7 +15,7 @@ type airlineinfo struct {
 type BookArgs struct {
     Flights []string
     Email string
-    count int
+    Count int
 }
 
 type BookReply struct {
