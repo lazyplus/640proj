@@ -34,7 +34,7 @@ func parseFlight(str string) *airlineproto.FlightStruct {
     f.ArrivalTime, _ = strconv.ParseInt(parts[2], 10, 64)
     f.DeparturePort = parts[3]
     f.ArrivalPort = parts[4]
-    tmp, _ := strconv.ParseInt(parts[1], 10, 32)
+    tmp, _ := strconv.ParseInt(parts[5], 10, 32)
     f.Capacity = int(tmp)
     f.AvailableTickets = f.Capacity
     return f
@@ -106,9 +106,24 @@ func main() {
             flightID := parts[i+3]
             args.Flights = append(args.Flights, flightID)
         }
+        fmt.Println(args.Flights)
         var reply coordproto.BookReply
         coordRPC.Call("CoordinatorRPC.BookFlights", args, &reply)
         fmt.Println(reply)
     case "c":
+        argStr := flag.Arg(1)
+        parts := strings.Split(argStr, ":")
+        args := &coordproto.BookArgs{}
+        args.Email = parts[0]
+        args.Count, _ = strconv.Atoi(parts[1])
+        flightCnt, _ := strconv.Atoi(parts[2])
+        for i:=0; i<flightCnt; i++ {
+            flightID := parts[i+3]
+            args.Flights = append(args.Flights, flightID)
+        }
+        fmt.Println(args.Flights)
+        var reply coordproto.BookReply
+        coordRPC.Call("CoordinatorRPC.CancelFlights", args, &reply)
+        fmt.Println(reply)
     }
 }

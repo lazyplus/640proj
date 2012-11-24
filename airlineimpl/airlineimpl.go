@@ -3,6 +3,7 @@ package airlineimpl
 import (
     "../airlineproto"
     "sync"
+    "fmt"
 )
 
 type FlightInfo struct {
@@ -55,38 +56,43 @@ func (as *AirlineServer) PrepareBookFlight(args *airlineproto.BookArgs, reply *a
     }
 
     flight.mutex.Lock()
+    flight.preparedAction = args
 
     if flight.deleted {
         reply.Status = airlineproto.ENOFLIGHT
-        flight.mutex.Unlock()
         return nil
     }
 
     if flight.flight.AvailableTickets < args.Count {
+        fmt.Printf("AvailableTickets: %d\n", flight.flight.AvailableTickets)
         reply.Status = airlineproto.ENOTICKET
-        flight.mutex.Unlock()
         return nil
     }
 
     reply.Status = airlineproto.OK
-    flight.preparedAction = args
     return nil
 }
 
 func (as *AirlineServer) BookDecision(args *airlineproto.DecisionArgs, reply *airlineproto.DecisionReply) error {
     flight := as.getFlight(args.FlightID)
-    defer flight.mutex.Unlock()
 
-    if flight.preparedAction == nil {
-        reply.Status = airlineproto.ENOPREPACT
+    if flight == nil {
+        reply.Status = airlineproto.ENOFLIGHT
         return nil
     }
+
+    defer flight.mutex.Unlock()
 
     act := flight.preparedAction
     flight.preparedAction = nil
 
     if args.Decision == airlineproto.COMMIT {
+        if act == nil {
+            reply.Status = airlineproto.ENOPREPACT
+            return nil
+        }
         flight.customers[act.Email] += act.Count
+        flight.flight.AvailableTickets -= act.Count
     }
 
     reply.Status = airlineproto.OK
@@ -94,6 +100,7 @@ func (as *AirlineServer) BookDecision(args *airlineproto.DecisionArgs, reply *ai
 }
 
 func (as *AirlineServer) PrepareCancelFlight(args *airlineproto.BookArgs, reply *airlineproto.BookReply) error {
+    fmt.Println("Called PrepareCancelFlight " + args.FlightID)
     flight := as.getFlight(args.FlightID)
 
     if flight == nil {
@@ -102,35 +109,45 @@ func (as *AirlineServer) PrepareCancelFlight(args *airlineproto.BookArgs, reply 
     }
 
     flight.mutex.Lock()
+    flight.preparedAction = args
 
     if flight.deleted {
         reply.Status = airlineproto.ENOFLIGHT
-        flight.mutex.Unlock()
+        return nil
+    }
+
+    if flight.customers[args.Email] < args.Count {
+        reply.Status = airlineproto.ENOTICKET
         return nil
     }
 
     reply.Status = airlineproto.OK
-    flight.preparedAction = args
     return nil
 }
 
 func (as *AirlineServer) CancelDecision(args *airlineproto.DecisionArgs, reply *airlineproto.DecisionReply) error {
     flight := as.getFlight(args.FlightID)
-    defer flight.mutex.Unlock()
 
-    if flight.preparedAction == nil {
-        reply.Status = airlineproto.ENOPREPACT
+    if flight == nil {
+        reply.Status = airlineproto.ENOFLIGHT
         return nil
     }
+
+    defer flight.mutex.Unlock()
 
     act := flight.preparedAction
     flight.preparedAction = nil
 
     if args.Decision == airlineproto.COMMIT {
+        if act == nil {
+            reply.Status = airlineproto.ENOPREPACT
+            return nil
+        }
         flight.customers[act.Email] -= act.Count
         if flight.customers[act.Email] == 0 {
             delete(flight.customers, act.Email)
         }
+        flight.flight.AvailableTickets += act.Count
     }
     
     reply.Status = airlineproto.OK

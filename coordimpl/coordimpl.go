@@ -8,6 +8,7 @@ import (
 	"strings"
 	"net/rpc"
 	"container/list"
+	"fmt"
 )
 
 type coordserver struct {
@@ -34,6 +35,7 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 	client_ls := make(map[string] *rpc.Client)
 	var shouldAbort bool = false
 	for i:=0;i<ls;i++ {
+		fmt.Println("Flight: " + args.Flights[i])
 		ss := strings.Split(args.Flights[i],"-")
 		id := args.Flights[i]
 		airline_name := ss[0]
@@ -42,13 +44,13 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 			shouldAbort = true
 			break
 		}
-		args_out := &airlineproto.BookArgs{ss[1],args.Email,args.Count}
+		args_out := &airlineproto.BookArgs{id,args.Email,args.Count}
 		reply := &airlineproto.BookReply{}
 		client, err := rpc.DialHTTP("tcp",addr)
 		if err != nil {
 			return err
 		}
-		bookcall := client.Go("asrpc.PrepareBookFlight",args_out, reply,nil)
+		bookcall := client.Go("AirlineServerRPC.PrepareBookFlight",args_out, reply,nil)
 		id_ls.PushBack(id)
 		wait_ls[id] = bookcall
 		reply_ls[id] = reply
@@ -76,7 +78,7 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 		client, _ := client_ls[ss]
 		args_out := &airlineproto.DecisionArgs{shouldCommit,ss}
 		reply := &airlineproto.DecisionReply{}
-		decisioncall := client.Go("asrpc.BookDecision", args_out, reply,nil)
+		decisioncall := client.Go("AirlineServerRPC.BookDecision", args_out, reply,nil)
 		wait_ls2[ss] = decisioncall
 		reply_ls2[ss] = reply
 	}
@@ -112,20 +114,19 @@ func (co *coordserver) CancelFlights(args *coordproto.BookArgs, ori_reply *coord
 	for i:=0;i<ls;i++ {
 		ss := strings.Split(args.Flights[i],"-")
 		airline_name := ss[0]
-		airline_id := ss[1]
 		id := args.Flights[i]
 		addr, found := co.airline_info.AirlineAddr[airline_name]
 		if found == false{
 			shouldAbort = true
 			break
 		}
-		args_out := &airlineproto.BookArgs{airline_id,args.Email,args.Count}
+		args_out := &airlineproto.BookArgs{id,args.Email,args.Count}
 		reply := &airlineproto.BookReply{}
 		client, err := rpc.DialHTTP("tcp",addr)
 		if err != nil {
 			return err
 		}
-		cancelcall := client.Go("asrpc.repareCancelFlight",args_out,reply,nil)
+		cancelcall := client.Go("AirlineServerRPC.PrepareCancelFlight",args_out,reply,nil)
 		id_ls.PushBack(id)
 		client_ls[id] = client
 		wait_ls[id] = cancelcall
@@ -152,7 +153,7 @@ func (co *coordserver) CancelFlights(args *coordproto.BookArgs, ori_reply *coord
 		client, _ := client_ls[ss]
 		args_out := &airlineproto.DecisionArgs{should_commit,ss}
 		reply := &airlineproto.DecisionReply{}
-		call := client.Go("asrpc.CancelDecision",args_out,reply, nil)
+		call := client.Go("AirlineServerRPC.CancelDecision",args_out,reply, nil)
 		wait_ls2[ss] = call
 		reply_ls2[ss] = reply
 	}

@@ -13,7 +13,7 @@ import (
 )
 
 var portnum *int = flag.Int("port", 0, "port # to listen on. nodes default to using an ephemeral port (0).")
-var path *string = flag.String("path","./","the path of the config file.")
+var path *string = flag.String("path","config/config","the path of the config file.")
 
 func main() {
     flag.Parse()
