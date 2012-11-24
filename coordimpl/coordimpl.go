@@ -35,11 +35,15 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 	wait_ls := make(map[string] *rpc.Call)
 	reply_ls := make(map[string] *airlineproto.BookReply)
 	client_ls := make(map[string] *rpc.Client)
-	
+	var shouldAbort bool = false
 	for i:=0;i<ls;i++ {
-		ss := strings.Split(args.Flights[i],"::")
+		ss := strings.Split(args.Flights[i],"-")
 		airline_name = ss[0]
-		addr := co.airline_info.addr_airline[airline_name]
+		addr , found := co.airline_info.addr_airline[airline_name]
+		if found == false {
+			shouldAbort = true
+			break
+		}
 		args_out := &airlineproto.BookArgs{ss[1],args.Email,args.count}
 		reply := &airlineproto.BookReply{}
 		client, err := rpc.DialHTTP("tcp",addr)
@@ -60,7 +64,7 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 		call , _:= wait_ls[ss]
 		reply_call := <- call.Done
 		reply , _:= reply_ls[ss]
-		if reply.Status != airlineproto.OK {
+		if reply.Status != airlineproto.OK || shouldAbort == true {
 			shouldCommit = airlineproto.ABORT
 			finalstatus = reply.Status
 		}
@@ -92,6 +96,9 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 		}
 	}	
 	ori_reply.Status = finalstatus
+	if shouldAbort {
+		ori_reply.Status = coordproto.ENOFLIGHT
+	}
 	return nil
 }
 
@@ -105,11 +112,16 @@ func (co *coordserver) CancelFlights(args *coordproto.CancelArgs, ori_reply *coo
 	reply_ls := make(map[string] *airlineproto.BookReply)
 	client_ls := make(map[string] *rpc.Client)
 	//assume the input is airline + "::" + ID
+	var shouldAbort bool = false
 	for i:=0;i<ls;i++ {
-		ss := strings.Split(args.Flights[i])
+		ss := strings.Split(args.Flights[i],"-")
 		airline_name := ss[0]
 		airline_id := ss[1]
-		addr := co.airline_info.addr_airline[airline_name]
+		addr, found := co.airline_info.addr_airline[airline_name]
+		if found == false{
+			shouldAbort = true
+			break
+		}
 		args_out := &airlineproto.BookArgs{airline_id,args.Email,args.count}
 		reply := &airlineproto.BookReply{}
 		client, err := rpc.DialHTTP("tcp",addr)
@@ -129,7 +141,7 @@ func (co *coordserver) CancelFlights(args *coordproto.CancelArgs, ori_reply *coo
 		call, _ := wait_ls[ss]
 		reply_call := call.Done
 		reply,_ := reply_ls[ss]
-		if reply.Status != airlineproto.OK {
+		if reply.Status != airlineproto.OK || shouldAbort {
 			should_commit = airlineproto.ABORT
 			final_status = reply.Status
 		}
@@ -159,5 +171,8 @@ func (co *coordserver) CancelFlights(args *coordproto.CancelArgs, ori_reply *coo
 		}
 	}
 	ori_reply.Status = final_status
+	if shouldAbort {
+		ori_reply.Status = coordproto.ENOFLIGHT
+	}
 	return nil	
 }
