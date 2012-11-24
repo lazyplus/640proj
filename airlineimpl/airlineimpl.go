@@ -5,21 +5,30 @@ import (
     "sync"
 )
 
+type FlightInfo struct {
+    flight *airlineproto.FlightStruct
+    preparedAction *airlineproto.BookArgs
+    customers map[string] int
+    mutex sync.Mutex
+    deleted bool
+}
+
 type AirlineServer struct {
     flightListLock sync.Mutex
-    flightList map[string] *airlineproto.FlightStruct
-    customers map[string] map[string] int
-    prepareAction map[int] *airlineproto.BookArgs
-    commitSeq int
+    flightList map[string] *FlightInfo
 }
 
 func NewAirlineServer () *AirlineServer {
     as := &AirlineServer{}
-    as.commitSeq = 0
-    as.flightList = make(map[string] *airlineproto.FlightStruct)
-    as.customers = make(map[string] map[string] int)
-    as.prepareAction = make(map[int] *airlineproto.BookArgs)
+    as.flightList = make(map[string] *FlightInfo)
     return as
+}
+
+func (as *AirlineServer) getFlight(id string) *FlightInfo {
+    as.flightListLock.Lock()
+    defer as.flightListLock.Unlock()
+
+    return as.flightList[id]
 }
 
 func (as *AirlineServer) QueryFlights(args *airlineproto.QueryArgs, reply *airlineproto.QueryReply) error {
@@ -28,8 +37,8 @@ func (as *AirlineServer) QueryFlights(args *airlineproto.QueryArgs, reply *airli
 
     reply.FlightList = make([]airlineproto.FlightStruct, 0)
     for _, value := range as.flightList {
-        if value.DepartureTime <= args.EndTime && value.DepartureTime >= args.StartTime {
-            reply.FlightList = append(reply.FlightList, *value)
+        if value.flight.DepartureTime <= args.EndTime && value.flight.DepartureTime >= args.StartTime {
+            reply.FlightList = append(reply.FlightList, *value.flight)
         }
     }
 
@@ -38,125 +47,160 @@ func (as *AirlineServer) QueryFlights(args *airlineproto.QueryArgs, reply *airli
 }
 
 func (as *AirlineServer) PrepareBookFlight(args *airlineproto.BookArgs, reply *airlineproto.BookReply) error {
-    as.flightListLock.Lock()
-    defer as.flightListLock.Unlock()
-
-    flight := as.flightList[args.FlightID]
+    flight := as.getFlight(args.FlightID)
 
     if flight == nil {
         reply.Status = airlineproto.ENOFLIGHT
         return nil
     }
-    if flight.AvailableTickets < args.Count {
+
+    flight.mutex.Lock()
+
+    if flight.deleted {
+        reply.Status = airlineproto.ENOFLIGHT
+        flight.mutex.Unlock()
+        return nil
+    }
+
+    if flight.flight.AvailableTickets < args.Count {
         reply.Status = airlineproto.ENOTICKET
+        flight.mutex.Unlock()
         return nil
     }
 
     reply.Status = airlineproto.OK
-    reply.Seq = as.commitSeq
-    as.commitSeq ++
-    as.prepareAction[reply.Seq] = args
+    flight.preparedAction = args
     return nil
 }
 
 func (as *AirlineServer) BookDecision(args *airlineproto.DecisionArgs, reply *airlineproto.DecisionReply) error {
-    as.flightListLock.Lock()
-    defer as.flightListLock.Unlock()
+    flight := as.getFlight(args.FlightID)
+    defer flight.mutex.Unlock()
 
-    if as.prepareAction[args.Seq] == nil {
-        reply.Status = airlineproto.ENOSEQ
+    if flight.preparedAction == nil {
+        reply.Status = airlineproto.ENOPREPACT
         return nil
     }
 
-    act := as.prepareAction[args.Seq]
-    as.customers[act.FlightID][act.Email] += act.Count
+    act := flight.preparedAction
+    flight.preparedAction = nil
+
+    if args.Decision == airlineproto.COMMIT {
+        flight.customers[act.Email] += act.Count
+    }
+
     reply.Status = airlineproto.OK
     return nil
 }
 
 func (as *AirlineServer) PrepareCancelFlight(args *airlineproto.BookArgs, reply *airlineproto.BookReply) error {
-    as.flightListLock.Lock()
-    defer as.flightListLock.Unlock()
-
-    flight := as.flightList[args.FlightID]
+    flight := as.getFlight(args.FlightID)
 
     if flight == nil {
         reply.Status = airlineproto.ENOFLIGHT
         return nil
     }
 
+    flight.mutex.Lock()
+
+    if flight.deleted {
+        reply.Status = airlineproto.ENOFLIGHT
+        flight.mutex.Unlock()
+        return nil
+    }
+
     reply.Status = airlineproto.OK
-    reply.Seq = as.commitSeq
-    as.commitSeq ++
-    as.prepareAction[reply.Seq] = args
+    flight.preparedAction = args
     return nil
 }
 
 func (as *AirlineServer) CancelDecision(args *airlineproto.DecisionArgs, reply *airlineproto.DecisionReply) error {
-    as.flightListLock.Lock()
-    defer as.flightListLock.Unlock()
+    flight := as.getFlight(args.FlightID)
+    defer flight.mutex.Unlock()
 
-    if as.prepareAction[args.Seq] == nil {
-        reply.Status = airlineproto.ENOSEQ
+    if flight.preparedAction == nil {
+        reply.Status = airlineproto.ENOPREPACT
         return nil
     }
 
-    act := as.prepareAction[args.Seq]
-    as.customers[act.FlightID][act.Email] -= act.Count
-    if as.customers[act.FlightID][act.Email] == 0 {
-        delete(as.customers[act.FlightID], act.Email)
+    act := flight.preparedAction
+    flight.preparedAction = nil
+
+    if args.Decision == airlineproto.COMMIT {
+        flight.customers[act.Email] -= act.Count
+        if flight.customers[act.Email] == 0 {
+            delete(flight.customers, act.Email)
+        }
     }
+    
     reply.Status = airlineproto.OK
     return nil
 }
 
 func (as *AirlineServer) DeleteFlight(args *airlineproto.DeleteArgs, reply *airlineproto.DeleteReply) error {
-    as.flightListLock.Lock()
-    defer as.flightListLock.Unlock()
-
-    flight := as.flightList[args.FlightID]
+    flight := as.getFlight(args.FlightID)
 
     if flight == nil {
         reply.Status = airlineproto.ENOFLIGHT
         return nil
     }
 
+    flight.mutex.Lock()
+    defer flight.mutex.Unlock()
+
+    as.flightListLock.Lock()
+    delete(as.flightList, args.FlightID)
+    as.flightListLock.Unlock()
+
     reply.CustomerEmails = make([]string, 0)
-    for key, _ := range as.customers[args.FlightID] {
+    for key, _ := range flight.customers {
         reply.CustomerEmails = append(reply.CustomerEmails, key)
     }
-    delete(as.flightList, args.FlightID)
-    delete(as.customers, args.FlightID)
+    flight.deleted = true
     reply.Status = airlineproto.OK
     return nil
 }
 
 func (as *AirlineServer) RescheduleFlight(args *airlineproto.RescheduleArgs, reply *airlineproto.RescheduleReply) error {
-    as.flightListLock.Lock()
-    defer as.flightListLock.Unlock()
-
-    flight := as.flightList[args.OldFlightID]
+    flight := as.getFlight(args.OldFlightID)
 
     if flight == nil {
         reply.Status = airlineproto.ENOFLIGHT
         return nil
     }
 
+    flight.mutex.Lock()
+
     reply.CustomerEmails = make([]string, 0)
-    for key, _ := range as.customers[args.OldFlightID] {
+    for key, _ := range flight.customers {
         reply.CustomerEmails = append(reply.CustomerEmails, key)
     }
-    as.flightList[args.OldFlightID] = &args.NewFlight
+    flight.flight = &args.NewFlight
     reply.Status = airlineproto.OK
+
+    flight.mutex.Unlock()
     return nil
 }
 
 func (as *AirlineServer) AddFlight(args *airlineproto.AddArgs, reply *airlineproto.AddReply) error {
-    as.flightListLock.Lock()
-    defer as.flightListLock.Unlock()
+    flight := as.getFlight(args.Flight.FlightID)
 
-    as.flightList[args.Flight.FlightID] = &args.Flight
-    as.customers[args.Flight.FlightID] = make(map[string] int)
+    if flight != nil {
+        reply.Status = airlineproto.EFLIGHTEXISTS
+        return nil
+    }
+
+    flightInfo := &FlightInfo{}
+    flightInfo.flight = &args.Flight
+    flightInfo.deleted = false
+    flightInfo.customers = make(map[string] int)
+    flightInfo.preparedAction = nil
+
+    as.flightListLock.Lock()
+
+    as.flightList[args.Flight.FlightID] = flightInfo
     reply.Status = airlineproto.OK
+
+    as.flightListLock.Unlock()
     return nil
 }

@@ -6,7 +6,12 @@ const (
     ENOFLIGHT
     ENOTICKET
     EFLIGHTEXISTS
-    ENOSEQ
+    ENOPREPACT
+)
+
+const (
+    COMMIT = iota
+    ABORT
 )
 
 type FlightStruct struct {
@@ -16,6 +21,7 @@ type FlightStruct struct {
     DeparturePort string
     ArrivalPort string
     AvailableTickets int
+    Capacity int
 }
 
 type QueryArgs struct {
@@ -36,12 +42,11 @@ type BookArgs struct {
 
 type BookReply struct {
     Status int
-    Seq int
 }
 
 type DecisionArgs struct {
     Decision int
-    Seq int
+    FlightID string
 }
 
 type DecisionReply struct {
