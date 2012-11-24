@@ -19,6 +19,6 @@ func (cdrpc *CoordinatorRPC) BookFlights(args *coordproto.BookArgs, reply *coord
     return cdrpc.cd.BookFlights(args, reply)
 }
 
-func (cdrpc *CoordinatorRPC) CancelFlights(args *coordproto.CancelArgs, reply *coordproto.CancelReply) error {
+func (cdrpc *CoordinatorRPC) CancelFlights(args *coordproto.BookArgs, reply *coordproto.BookReply) error {
     return cdrpc.cd.CancelFlights(args, reply)
 }

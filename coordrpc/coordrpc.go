@@ -4,7 +4,7 @@ import "../coordproto"
 
 type CoordinatorInterface interface {
     BookFlights(*coordproto.BookArgs, *coordproto.BookReply) error
-    CancelFlights(*coordproto.CancelArgs, *coordproto.CancelReply) error
+    CancelFlights(*coordproto.BookArgs, *coordproto.BookReply) error
 }
 
 type CoordinatorRPC struct {
