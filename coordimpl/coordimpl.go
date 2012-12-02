@@ -92,6 +92,8 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 		if reply.Status != airlineproto.OK {
 			finalstatus = reply.Status
 		}
+		cl := client_ls[ss]
+		cl.Close()
 	}	
 	ori_reply.Status = finalstatus
 	if shouldAbort {
@@ -166,6 +168,8 @@ func (co *coordserver) CancelFlights(args *coordproto.BookArgs, ori_reply *coord
 		if reply.Status != airlineproto.OK {
 			final_status = reply.Status
 		}
+		cl := client_ls[ss]
+		cl.Close()
 	}
 	ori_reply.Status = final_status
 	if shouldAbort {
