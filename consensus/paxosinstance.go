@@ -4,9 +4,9 @@ import (
 	"math/rand"
 )
 
-func generate_random_number(int PeerID) int {
+func generate_random_number(PeerID int, numNodes int) int {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	return (r.Intn(10)*3 + peerID)
+	return (r.Intn(10)*numNodes + peerID)
 }
 
 func NewPaxosInstance(peerID int, seq int, numNodes int) *PaxosInstance {
@@ -14,7 +14,9 @@ func NewPaxosInstance(peerID int, seq int, numNodes int) *PaxosInstance {
     pi.seq = seq
     pi.PeerID = peerID
     pi.numNodes = numNodes
-    pi.Myn = generate_random_number(peerID)
+    pi.Myn = generate_random_number(peerID,numNodes)
+    pi.prepareCh = make(chan * MsgStruct)
+    pi.acceptCh = make(chan * MsgStruct)
     return pi
 }
 
@@ -67,6 +69,8 @@ func (pi *PaxosInstance) Run() {
             case COMMIT:
                 handleCommit(inPkt)
             }
+        case <- pi.shouldExit:
+            break
         }
     }
 }
@@ -74,7 +78,7 @@ func (pi *PaxosInstance) Run() {
 
 func (pi *PaxosInstance) initPkt () *Packet {
 	p := &Packet{}
-	p.Msg = &MsgStruct
+	p.Msg = &MsgStruct{}
 	p.PeerID = pi.PeerID
 	p.Msg.Seq = pi.seq
 	return p
@@ -84,53 +88,65 @@ func (pi *PaxosInstance) handlePrepare(pkt Packet) {
     if pkt.Msg.Seq < pi.seq {
         // reply prepare behind
         newPkt = pi.initPkt()
+        newPkt.PeerID = pkt.PeerID
         newPkt.Msg.Type = PREPARE_BEHIND
-        out <- newPkt
+        newPkt.Msg.Va = pi.log[pkt.Msg.Seq]
+        pi.out <- newPkt
     }
     if msg.Na < pi.Na {
         // reply prepare rejected
  		newPkt = pi.initPkt()
+ 		newPkt.PeerID = pkt.PeerID
         newPkt.Msg.Type = PREPARE_REJECT
-        out <- newPkt
+        pi.out <- newPkt
     }else {
         pi.Nh = msg.Na
         // reply prepare OK, Va
         newPkt = pi.initPkt()
+        newPkt.PeerID = pkt.PeerID
         newPkt.Msg.Type = PREPARE_OK
         newPkt.Msg.Va = pi.Va
         newPkt.Msg.Na = pi.Na
-        out <- newPkt
+        pi.out <- newPkt
     }
 }
 
 
-func (pi *PaxosInstance) handleAccept(msg Msg) {
+func (pi *PaxosInstance) handleAccept(pkt Packet) {
+	msg := pkt.Msg
     if msg.Na < pi.Nh {
         // reply accept rejected
         newPkt = pi.initPkt()
+        newPkt.PeerID = pkt.PeerID
         newPkt.Msg.Type = ACCEPT_REJECT
-        out <- newPkt
+        pi.out <- newPkt
     }else{
         pi.Na = msg.Na
         pi.Va = msg.Va
         pi.Nh = msg.Nh
         // reply accept OK
+        newPkt = pi.initPkt()
+        newPkt.PeerID = pkt.PeerID
         newPkt.Msg.Type = ACCEPT_OK
-        out <- newPkt
+        pi.out <- newPkt
     }
 }
 
 func (pi *PaxosInstance) handleCommit() {
+	//receive commit, notify paxosengine to record the log and take action
 	newPkt = pi.initPkt()
+	newPkt.PeerID = pi.PeerID
 	newPkt.Msg.Type = COMMIT_OK
-	out <- newPkt
+	newPkt.Msg.Va = pi.Va
+	pi.prog <- newPkt
 }
 
 func (pi *PaxosInstance) prepare() (int, ValueStruct) {
     msg := &MsgStruct{}
     msg.Type = PREPARE
     msg.Na = pi.Myn
-    pi.brd <- msg 
+    newPkt := &Packet{pi.PeerID,msg}
+    pi.brd <- newPkt 
     p := <- pi.prepareCh //wait for the reply
     var state int
     var v ValueStruct
@@ -139,11 +155,10 @@ func (pi *PaxosInstance) prepare() (int, ValueStruct) {
     		state = PREPARE_OK
     		v = p.Va
     	case PREPARE_REJECT:
- 			state = PREPARE_REJECT
- 			v = nil   	
+ 			state = PREPARE_REJECT   	
     	case PREPARE_BEHIND:
     		state = PREPARE_BEHIND
-    		v = nil
+    		v = p.Va
     }
     return state, v
 }
@@ -153,7 +168,9 @@ func (pi * PaxosInstance) Accept() int {
 	msg.Type = ACCEPT
 	msg.Myn = pi.Myn
 	msg.Va = pi.Va
-	pi.brd <- msg
+	newPkt := &Packet{pi.PeerID,msg}
+	pi.brd <- newPkt
+	p := <- pi.acceptCh
 	switch p.Type {
 		case ACCEPT_OK:
 			return ACCEPT_OK	
@@ -167,5 +184,6 @@ func (pi * PaxosInstance) Commit() {
 	msg := &MsgStruct{}
 	msg.Type = COMMIT
 	msg.Va = pi.Va
-	pi.brd <- msg
+	newPkt := &Packet{pi.PeerID,msg}
+	pi.brd <- newPkt
 }

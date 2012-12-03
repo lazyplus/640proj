@@ -14,7 +14,7 @@ import (
 func NewPaxosEngine(path String, airline_name string, ID int) *PaxosEngine {
     pe := &PaxosEngine{}
     pe.cur_seq = 0
-    pe.log = make(map[int] *logStruct)
+    pe.log = make(map[int] *ValueStruct)
     // read configure file
 	conf, _ := config.ReadConfigFile(path)
 	airline_server_list, found := conf.AirlineAddr[airline_name]
@@ -41,10 +41,15 @@ func NewPaxosEngine(path String, airline_name string, ID int) *PaxosEngine {
 	pe.in = make(chan * Packet)
 	pe.out = make(chan * Packet)
 	pe.brd = make(chan * MsgStruct)
+	pe.prog = make(chan * Packet)
+	pe.exitCurrentPI = make(chan int)
 	pe.cur_paxos = NewPaxosInstance( ID , cur_seq ,len_list )
 	pe.cur_paxos.in = pe.in
 	pe.cur_paxos.out = pe.out
 	pe.cur_paxos.brd = pe.brd
+	pe.cur_paxos.prog = pe.prog
+	pe.cur_paxos.log = pe.log
+	pe.cur_paxos.shouldExit = pe.exitCurrentPI
 	pe.RPCReceiver = new(RPCStruct)
 	pe.RPCReceiver.in = pe.in
 	rpc.Register(pe.RPCReceiver)
@@ -80,6 +85,7 @@ func (pe *PaxosEngine) Run() {
                     break
                 }
             }
+        }
         case brdMSg := <- pe.brd:
             for i:=0; i<len(pe.servers); i++ {
                 //pe.networkHandler.sendMsg(brdMsg, servers.Addr)
@@ -87,16 +93,20 @@ func (pe *PaxosEngine) Run() {
                 pe.clients[i].Go("RPCReceiver.receiveRPC",brdMsg, nil, nil)
             }
         case req := <- pe.prog:
-            req.reply <- pe.progress(req.V)
+            req.reply <- pe.progress(req.Msg.Va)
         }
     }
 }
 
 func (pe *PaxosEngine) progress(V ValueStruct) {
     pe.as.Progress(V)
+    pe.log[cur_seq] = V
     pe.cur_seq ++
+    pe.exitCurrentPI <- 1
     pe.cur_paxos = NewPaxosInstance(cur_seq)
 }
+
+
 
 func (pe *PaxosEngine) Propose() {
     pe.mutex.Lock()
@@ -131,12 +141,12 @@ func (pe *PaxosEngine) Propose() {
     }
 
     OK = pe.cur_paxos.accept(Vp)
-    if !OK {
+    if OK == -1 {
         reply.Status = FAILED
         return nil
     }
 
-    pe.cur_paxos.commit(Vp)
+    pe.cur_paxos.commit(Vp) 
 
     reply.Result = pe.ReqProgress(Vp)
     reply.Status = FAILED

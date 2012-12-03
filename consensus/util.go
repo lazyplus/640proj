@@ -46,23 +46,20 @@ type RPCStruct struct {
 
 type PaxosEngine struct {
 	numNodes int
-    log map[int] *logStruct
+    log map[int] *ValueStruct
     clients []*rpc.Client
     servers []*NodeStruct
     cur_seq int
     cur_paxos PaxosInstance
     mutex sync.Mutex
-    in chan * Packet
+    in chan * MsgStruct
     out chan * Packet
-    brd chan * MsgStruct
+    brd chan * Packet
+	prog chan * Packet
+	exitCurrentPI chan int
     peerID int
     // network
     RPCReceiver * RPCStruct
-}
-
-type logStruct struct {
-	op_type int
-	Action interface{}
 }
 
 type ValueStruct struct {
@@ -74,14 +71,18 @@ type ValueStruct struct {
 
 type Packet struct {
     PeerID int
-    Msg MsgStruct
+    Msg * MsgStruct
 }
 
 type PaxosInstance struct {
+	log map[int] *ValueStruct
     out chan * Packet
     brd chan * Packet
     in chan * MsgStruct
+    prog chan * Packet
     prepareCh chan * MsgStruct
+    acceptCh chan * MsgStruct
+    shouldExit chan int
 	Na int
 	Nh int
 	Myn int
