@@ -26,6 +26,12 @@ const (
 	c_AddFlight
 )
 
+const (
+	Propose_OK = iota
+	Propose_RETRY
+	Propose_FAIL
+)
+
 type Delegate struct {
     Action interface{}
     timer chan interface{}
@@ -57,6 +63,7 @@ type PaxosEngine struct {
     brd chan * Packet
 	prog chan * Packet
 	exitCurrentPI chan int
+	exitThisEngine chan int
     peerID int
     // network
     RPCReceiver * RPCStruct
@@ -66,7 +73,14 @@ type ValueStruct struct {
     CoordSeq int
     Type int
     Action interface{}
+    reply interface{}
     Host string
+}
+
+type replyStruct struct {
+	reply interface{}
+	Type int
+	Status int
 }
 
 type Packet struct {

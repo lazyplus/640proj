@@ -35,20 +35,17 @@ func (pi *PaxosInstance) Run() {
 				pi.PreaccepteNodes ++
 				if (pi.PreaccepteNodes > (numNodes/2)) && !finishPrepare {
 					finishPrepare = true
-//					pi.prepareCh <- inPkt.Msg.Type
 					pi.prepareCh <- inPkt.Msg
 				}                
             case PREPARE_REJECT:
                 pi.PrefailNodes ++
                 if pi.PrefailNodes > (numNodes/2)) && !finishPrepare {
                 	finishPrepare = true
-//                	pi.prepareCh <- inPkt.Msg.Type
  					pi.prepareCh <- inPkt.Msg
                 }
             case PREPARE_BEHIND:
             	if !finishPrepare {
             		finishPrepare = true
-//                	pi.prepareCh <- inPkt.Msg.Type
 					pi.prepareCh <- inPkt.Msg
                 }
             case ACCEPT:
@@ -60,7 +57,6 @@ func (pi *PaxosInstance) Run() {
                 	pi.acceptCh <- inPkt.Msg
                 }
             case ACCEPT_REJECT:
-//                pi.acceptCh <- inPkt.Msg.Type
 				pi.AcpfailNodes ++
 				if (pi.AcpacceptedNodes > (numNodes/2)) && !finishAccept{
                 	finishAccept = true
