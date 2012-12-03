@@ -15,6 +15,9 @@ func NewPaxosInstance(peerID int, seq int, numNodes int) *PaxosInstance {
     pi.PeerID = peerID
     pi.numNodes = numNodes
     pi.Myn = generate_random_number(peerID)
+    pi.out = make(chan * Packet)
+    pi.brd = make(chan * Packet)
+    pi.in = make(chan * MsgStruct)
     return pi
 }
 
