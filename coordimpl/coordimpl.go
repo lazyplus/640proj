@@ -2,7 +2,7 @@ package coordimpl
 
 import (
 	"../coordproto"
-	"../airlineproto"
+	"../delegateproto"
 	"../config"
 	"sync"
 	"strings"
@@ -14,10 +14,12 @@ import (
 type coordserver struct {
 	airline_info	*config.Config
 	map_lock		sync.Mutex
+	coordSeq		int
 }
 
 func NewCoordinator (path string) *coordserver {
 	co := &coordserver{}
+	co.coordSeq = 0
 	co.airline_info , _ = config.ReadConfigFile(path)
 	return co
 }
@@ -31,7 +33,7 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 	ls := len(args.Flights)
 	id_ls := list.New()
 	wait_ls := make(map[string] *rpc.Call)
-	reply_ls := make(map[string] *airlineproto.BookReply)
+	reply_ls := make(map[string] *delegateproto.BookReply)
 	client_ls := make(map[string] *rpc.Client)
 	var shouldAbort bool = false
 	for i:=0;i<ls;i++ {
@@ -39,13 +41,14 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 		ss := strings.Split(args.Flights[i],"-")
 		id := args.Flights[i]
 		airline_name := ss[0]
-		addr , found := co.airline_info.AirlineAddr[airline_name]
+		addr_list , found := co.airline_info.Airlines[airline_name]
 		if found == false {
 			shouldAbort = true
 			break
 		}
-		args_out := &airlineproto.BookArgs{id,args.Email,args.Count}
-		reply := &airlineproto.BookReply{}
+		addr := addr_list.DelegateHostPort
+		args_out := &delegateproto.BookArgs{id,args.Email,args.Count,co.coordSeq}
+		reply := &delegateproto.BookReply{}
 		client, err := rpc.DialHTTP("tcp",addr)
 		if err != nil {
 			return err
@@ -56,7 +59,7 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 		reply_ls[id] = reply
 		client_ls[id] = client	
 	}
-	var shouldCommit int = airlineproto.COMMIT
+	var shouldCommit int = delegateproto.COMMIT
 	var finalstatus int = coordproto.OK
 	
 	for e := id_ls.Front();e != nil; e=e.Next() {
@@ -64,21 +67,21 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 		call , _:= wait_ls[ss]
 		<- call.Done
 		reply , _:= reply_ls[ss]
-		if reply.Status != airlineproto.OK || shouldAbort == true {
-			shouldCommit = airlineproto.ABORT
+		if reply.Status != delegateproto.OK || shouldAbort == true {
+			shouldCommit = delegateproto.ABORT
 			finalstatus = reply.Status
 		}
 	}
 	
 	//second phase
 	wait_ls2 := make(map[string] *rpc.Call)
-	reply_ls2 := make(map[string] *airlineproto.DecisionReply)
+	reply_ls2 := make(map[string] *delegateproto.DecisionReply)
 	for e:=id_ls.Front();e!=nil;e=e.Next() {
 		ss := e.Value.(string)
 		client, _ := client_ls[ss]
-		args_out := &airlineproto.DecisionArgs{shouldCommit,ss}
-		reply := &airlineproto.DecisionReply{}
-		decisioncall := client.Go("AirlineServerRPC.BookDecision", args_out, reply,nil)
+		args_out := &delegateproto.DecisionArgs{shouldCommit,ss,co.coordSeq}
+		reply := &delegateproto.DecisionReply{}
+		decisioncall := client.Go("DelegateServerRPC.BookDecision", args_out, reply,nil)
 		wait_ls2[ss] = decisioncall
 		reply_ls2[ss] = reply
 	}
@@ -89,7 +92,7 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 		call , _ := wait_ls2[ss]
 		<- call.Done
 		reply , _ := reply_ls2[ss]
-		if reply.Status != airlineproto.OK {
+		if reply.Status != delegateproto.OK {
 			finalstatus = reply.Status
 		}
 		cl := client_ls[ss]
@@ -99,6 +102,7 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 	if shouldAbort {
 		ori_reply.Status = coordproto.ENOFLIGHT
 	}
+	co.coordSeq ++ 
 	return nil
 }
 
@@ -109,7 +113,7 @@ func (co *coordserver) CancelFlights(args *coordproto.BookArgs, ori_reply *coord
 	ls := len(args.Flights)
 	id_ls := list.New()
 	wait_ls := make(map[string] *rpc.Call)
-	reply_ls := make(map[string] *airlineproto.BookReply)
+	reply_ls := make(map[string] *delegateproto.BookReply)
 	client_ls := make(map[string] *rpc.Client)
 	//assume the input is airline + "::" + ID
 	var shouldAbort bool = false
@@ -117,44 +121,45 @@ func (co *coordserver) CancelFlights(args *coordproto.BookArgs, ori_reply *coord
 		ss := strings.Split(args.Flights[i],"-")
 		airline_name := ss[0]
 		id := args.Flights[i]
-		addr, found := co.airline_info.AirlineAddr[airline_name]
+		addr_list, found := co.airline_info.Airlines[airline_name]
 		if found == false{
 			shouldAbort = true
 			break
 		}
-		args_out := &airlineproto.BookArgs{id,args.Email,args.Count}
-		reply := &airlineproto.BookReply{}
+		addr := addr_list.DelegateHostPort
+		args_out := &delegateproto.BookArgs{id,args.Email,args.Count,co.coordSeq}
+		reply := &delegateproto.BookReply{}
 		client, err := rpc.DialHTTP("tcp",addr)
 		if err != nil {
 			return err
 		}
-		cancelcall := client.Go("AirlineServerRPC.PrepareCancelFlight",args_out,reply,nil)
+		cancelcall := client.Go("DelegateServerRPC.PrepareCancelFlight",args_out,reply,nil)
 		id_ls.PushBack(id)
 		client_ls[id] = client
 		wait_ls[id] = cancelcall
 		reply_ls[id] = reply
 	}	
-	var should_commit int = airlineproto.COMMIT
+	var should_commit int = delegateproto.COMMIT
 	var final_status int = coordproto.OK
 	for e:=id_ls.Front();e!=nil;e=e.Next() {
 		ss := e.Value.(string)
 		call, _ := wait_ls[ss]
 		<- call.Done
 		reply,_ := reply_ls[ss]
-		if reply.Status != airlineproto.OK || shouldAbort {
-			should_commit = airlineproto.ABORT
+		if reply.Status != delegateproto.OK || shouldAbort {
+			should_commit = delegateproto.ABORT
 			final_status = reply.Status
 		}
 	}
 	//second phase
 	wait_ls2 := make(map[string] *rpc.Call)
-	reply_ls2 := make(map[string] *airlineproto.DecisionReply)
+	reply_ls2 := make(map[string] *delegateproto.DecisionReply)
 
 	for e:=id_ls.Front();e!=nil;e=e.Next() {
 		ss := e.Value.(string)
 		client, _ := client_ls[ss]
-		args_out := &airlineproto.DecisionArgs{should_commit,ss}
-		reply := &airlineproto.DecisionReply{}
+		args_out := &delegateproto.DecisionArgs{should_commit,ss,co.coordSeq}
+		reply := &delegateproto.DecisionReply{}
 		call := client.Go("AirlineServerRPC.CancelDecision",args_out,reply, nil)
 		wait_ls2[ss] = call
 		reply_ls2[ss] = reply
@@ -165,7 +170,7 @@ func (co *coordserver) CancelFlights(args *coordproto.BookArgs, ori_reply *coord
 		call, _ := wait_ls2[ss]
 		<- call.Done
 		reply, _ := reply_ls2[ss]
-		if reply.Status != airlineproto.OK {
+		if reply.Status != delegateproto.OK {
 			final_status = reply.Status
 		}
 		cl := client_ls[ss]
@@ -175,5 +180,6 @@ func (co *coordserver) CancelFlights(args *coordproto.BookArgs, ori_reply *coord
 	if shouldAbort {
 		ori_reply.Status = coordproto.ENOFLIGHT
 	}
+	co.coordSeq++
 	return nil	
 }
