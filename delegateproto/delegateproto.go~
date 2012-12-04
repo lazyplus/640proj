@@ -27,13 +27,13 @@ type FlightStruct struct {
 type QueryArgs struct {
     StartTime int64
     EndTime int64
-    Seqnum int
+    seqnum int
 }
 
 type QueryReply struct {
     Status int
     FlightList []FlightStruct
-    Seqnum int
+    seqnum int
 }
 
 type BookArgs struct {
@@ -45,51 +45,51 @@ type BookArgs struct {
 
 type BookReply struct {
     Status int
-    Seqnum int
+    seqnum int
 }
 
 type DecisionArgs struct {
     Decision int
     FlightID string
-    Seqnum int
+    seqnum int
 }
 
 type DecisionReply struct {
     Status int
-    Seqnum int
+    seqnum int
 }
 
 type DeleteArgs struct {
     FlightID string
-    Seqnum int
+    seqnum int
 }
 
 type DeleteReply struct {
     Status int
     CustomerEmails []string
-    Seqnum int
+    seqnum int
 }
 
 type RescheduleArgs struct {
     OldFlightID string
     NewFlight FlightStruct
-    Seqnum int
+    seqnum int
 }
 
 type RescheduleReply struct {
     Status int
     CustomerEmails []string
-    Seqnum int
+    seqnum int
 }
 
 type AddArgs struct {
     Flight FlightStruct
-    Seqnum int
+    seqnum int
 }
 
 type AddReply struct {
     Status int
-    Seqnum int
+    seqnum int
 }
 
 type DelegateServerInterface interface {
