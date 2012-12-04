@@ -36,7 +36,7 @@ func (pi *PaxosInstance) Run() {
 				if (pi.PreaccepteNodes > (numNodes/2)) && !finishPrepare {
 					finishPrepare = true
 					pi.prepareCh <- inPkt.Msg
-				}                
+				}
             case PREPARE_REJECT:
                 pi.PrefailNodes ++
                 if pi.PrefailNodes > (numNodes/2)) && !finishPrepare {

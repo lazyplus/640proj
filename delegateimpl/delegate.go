@@ -17,15 +17,10 @@ func NewDelegate(path string, airline_name string, port string) *Delegate {
 	dg.numServers = len_list
 	dg.servers = make([]string,len_list)
 	dg.cli = make([]*rpc.Client,len_list)
-	for e := airline_server_list.Front(); e != nil; e = e.Next() {
+	for e := airline_server_list.Front(); e != nil; e = e.Next(), i++ {
 		addr := e.Value
 		dg.servers[i] = addr
-		client, err := rpc.DialHTTP("tcp",addr)
-		if err != nil {
-			cli[i] = client
-			i++
-		}
-		//else : give up this node
+		dg.cli[i] = nil
 	}
 	dg.Port = port
 	return dg
@@ -36,8 +31,18 @@ func (dg *Delegate) Push(V ValueStruct) interface{} {
 
     for ; ; index = (index + 1) % len(dg.servers) {
         var reply interface{}
-        dg.cli[index].Call("AirlineServerRPC.Propose", V, reply)
+        client, err := rpc.DialHTTP("tcp", dg.servers)
+        if err != nil {
+            continue
+        }
+        // TODO: prepare RPC client
+        err = client.Call("AirlineServerRPC.Propose", V, reply)
+        if err != nil {
+            client.Close()
+            continue
+        }
         if reply != nil {
+            client.Close()
             return reply
         }
         timer.Sleep(time.Second)
@@ -51,7 +56,7 @@ func (dg *Delegate) PrepareCancelFlight(args * BookArgs, reply * BookReply) erro
     V.port = dg.Port
     V.CoordSeq = args.seqnum
     V.Type = c_PrepareCancelFlight
-    reply = dg.Push(V)
+    *reply = dg.Push(V)
     return nil
 }
 
@@ -61,7 +66,7 @@ func (dg *Delegate) QueryFlights(args * QueryArgs, reply * QueryReply) error {
     V.port = dg.Port
     V.CoordSeq = args.seqnum
     V.Type = c_QueryFlights
-    reply = dg.Push(V)
+    *reply = dg.Push(V)
     return nil
 }
 
@@ -71,7 +76,7 @@ func (dg *Delegate) PrepareBookFlight(args * BookArgs, reply * BookReply) error 
     V.port = dg.Port
     V.CoordSeq = args.seqnum
     V.Type = c_PrepareBookFlight
-    reply = dg.Push(V)
+    *reply = dg.Push(V)
     return nil
 }
 
@@ -81,7 +86,7 @@ func (dg *Delegate) BookDecision(args * DecisionArgs, reply * DecisionReply) err
     V.port = dg.Port
     V.CoordSeq = args.seqnum
     V.Type = c_BookDecision
-    reply = dg.Push(V)
+    *reply = dg.Push(V)
     return nil
 }
 
@@ -91,7 +96,7 @@ func (dg *Delegate) CancelDecision(args * DecisionArgs, reply * DecisionReply) e
     V.port = dg.Port
     V.CoordSeq = args.seqnum
     V.Type = c_CancelDecision
-    reply = dg.Push(V)
+    *reply = dg.Push(V)
     return nil
 }
 
@@ -101,7 +106,7 @@ func (dg *Delegate) DeleteFlight(args * DeleteArgs, reply * DeleteReply) error {
     V.port = dg.Port
     V.CoordSeq = args.seqnum
     V.Type = c_DeleteFlight
-    reply = dg.Push(V)
+    *reply = dg.Push(V)
     return nil
 }
 
@@ -111,7 +116,7 @@ func (dg *Delegate) RescheduleFlight(args * RescheduleArgs, reply * RescheduleRe
     V.port = dg.Port
     V.CoordSeq = args.seqnum
     V.Type = c_RescheduleFlight
-    reply = dg.Push(V)
+    *reply = dg.Push(V)
     return nil
 }
 
@@ -121,6 +126,6 @@ func (dg *Delegate) AddFlight(args * AddArgs, reply * AddReply) error {
     V.port = dg.Port
     V.CoordSeq = args.seqnum
     V.Type = c_AddFlight
-    reply = dg.Push(V)
+    *reply = dg.Push(V)
     return nil
 }
