@@ -4,12 +4,12 @@ import(
     "sync"
 )
 
-type PLocke struct {
+type PLock struct {
     cnt_lock sync.Mutex
     cnt int
 }
 
-func (l *PLocke) TryLock() bool {
+func (l *PLock) TryLock() bool {
     l.cnt_lock.Lock()
     defer l.cnt_lock.Unlock()
 
@@ -20,16 +20,16 @@ func (l *PLocke) TryLock() bool {
     return false
 }
 
-func (l* PLocke) SpinLock() {
+func (l* PLock) SpinLock() {
     for ret := l.TryLock(); !ret; ret = l.TryLock() {
     }
     return
 }
 
-func (l *PLocke) Unlock() {
+func (l *PLock) Unlock() {
     l.cnt_lock.Lock()
     defer l.cnt_lock.Unlock()
 
-    -- l.cnt
+    l.cnt --
     return
 }

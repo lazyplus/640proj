@@ -3,8 +3,10 @@ package airlineserver
 import (
     "../ultility"
     "../delegateproto"
+    "../paxosproto"
     "sync"
     "fmt"
+    "errors"
 )
 
 type FlightInfo struct {
@@ -26,46 +28,48 @@ func NewAirlineServer () *AirlineServer {
     return as
 }
 
-func (as *AirlineServer) Progress(V ValueStruct) interface{}, error {
+func (as *AirlineServer) Progress(V paxosproto.ValueStruct) (interface{}, error) {
     var reply interface{}
+    var err error
+
     switch (V.Type) {
-    case c_QueryFlights:
-        err := as.QueryFlights(V.Action.(delegateproto.QueryArgs), reply)
+    case paxosproto.C_QueryFlights:
+        reply, err = as.QueryFlights(V.Action.(delegateproto.QueryArgs))
         if err != nil {
             return nil, err
         }
-    case c_PrepareBookFlight:
-        err := as.PrepareBookFlight(V.Action.(delegateproto.BookArgs), reply)
+    case paxosproto.C_PrepareBookFlight:
+        reply, err = as.PrepareBookFlight(V.Action.(delegateproto.BookArgs))
         if err != nil {
             return nil, err
         }
-    case c_PrepareCancelFlight:
-        err := as.PrepareCancelFlight(V.Action.(delegateproto.BookArgs), reply)
+    case paxosproto.C_PrepareCancelFlight:
+        reply, err = as.PrepareCancelFlight(V.Action.(delegateproto.BookArgs))
         if err != nil {
             return nil, err
         }
-    case c_BookDecision:
-        err := as.BookDecision(V.Action.(delegateproto.BookDecision), reply)
+    case paxosproto.C_BookDecision:
+        reply, err = as.BookDecision(V.Action.(delegateproto.DecisionArgs))
         if err != nil {
             return nil, err
         }
-    case c_CancelDecision:
-        err := as.CancelDecision(V.Action.(delegateproto.BookDecision), reply)
+    case paxosproto.C_CancelDecision:
+        reply, err = as.CancelDecision(V.Action.(delegateproto.DecisionArgs))
         if err != nil {
             return nil, err
         }
-    case c_DeleteFlight:
-        err := as.DeleteFlight(V.Action.(delegateproto.DeleteArgs), reply)
+    case paxosproto.C_DeleteFlight:
+        reply, err = as.DeleteFlight(V.Action.(delegateproto.DeleteArgs))
         if err != nil {
             return nil, err
         }
-    case c_RescheduleFlight:
-        err := as.RescheduleFlight(V.Action.(delegateproto.RescheduleArgs), reply)
+    case paxosproto.C_RescheduleFlight:
+        reply, err = as.RescheduleFlight(V.Action.(delegateproto.RescheduleArgs))
         if err != nil {
             return nil, err
         }
-    case c_AddFlight:
-        err := as.AddFlight(V.Action.(delegateproto.AddArgs), reply)
+    case paxosproto.C_AddFlight:
+        reply, err = as.AddFlight(V.Action.(delegateproto.AddArgs))
         if err != nil {
             return nil, err
         }
@@ -80,7 +84,9 @@ func (as *AirlineServer) getFlight(id string) *FlightInfo {
     return as.flightList[id]
 }
 
-func (as *AirlineServer) QueryFlights(args *delegateproto.QueryArgs, reply *delegateproto.QueryReply) error {
+func (as *AirlineServer) QueryFlights(args delegateproto.QueryArgs) (*delegateproto.QueryReply, error) {
+    reply := &delegateproto.QueryReply{}
+
     as.flightListLock.Lock()
     defer as.flightListLock.Unlock()
 
@@ -92,46 +98,51 @@ func (as *AirlineServer) QueryFlights(args *delegateproto.QueryArgs, reply *dele
     }
 
     reply.Status = delegateproto.OK
-    return nil
+    return reply, nil
 }
 
-func (as *AirlineServer) PrepareBookFlight(args *delegateproto.BookArgs, reply *delegateproto.BookReply) error {
+func (as *AirlineServer) PrepareBookFlight(args delegateproto.BookArgs) (*delegateproto.BookReply, error) {
+    reply := &delegateproto.BookReply{}
+
     flight := as.getFlight(args.FlightID)
 
     if flight == nil {
         reply.Status = delegateproto.ENOFLIGHT
-        return nil
+        return reply, nil
     }
 
     getLock := flight.mutex.TryLock()
 
     if !getLock {
-        return errors.New("Cannot get lock")
+        return nil, errors.New("Cannot get lock")
     }
 
-    flight.preparedAction = args
+    /// WATCHOUT
+    flight.preparedAction = &args
 
     if flight.deleted {
         reply.Status = delegateproto.ENOFLIGHT
-        return nil
+        return reply, nil
     }
 
     if flight.flight.AvailableTickets < args.Count {
         fmt.Printf("AvailableTickets: %d\n", flight.flight.AvailableTickets)
         reply.Status = delegateproto.ENOTICKET
-        return nil
+        return reply, nil
     }
 
     reply.Status = delegateproto.OK
-    return nil
+    return reply, nil
 }
 
-func (as *AirlineServer) BookDecision(args *delegateproto.DecisionArgs, reply *delegateproto.DecisionReply) error {
+func (as *AirlineServer) BookDecision(args delegateproto.DecisionArgs) (*delegateproto.DecisionReply, error) {
+    reply := &delegateproto.DecisionReply{}
+
     flight := as.getFlight(args.FlightID)
 
     if flight == nil {
         reply.Status = delegateproto.ENOFLIGHT
-        return nil
+        return reply, nil
     }
 
     defer flight.mutex.Unlock()
@@ -142,53 +153,58 @@ func (as *AirlineServer) BookDecision(args *delegateproto.DecisionArgs, reply *d
     if args.Decision == delegateproto.COMMIT {
         if act == nil {
             reply.Status = delegateproto.ENOPREPACT
-            return nil
+            return reply, nil
         }
         flight.customers[act.Email] += act.Count
         flight.flight.AvailableTickets -= act.Count
     }
 
     reply.Status = delegateproto.OK
-    return nil
+    return reply, nil
 }
 
-func (as *AirlineServer) PrepareCancelFlight(args *delegateproto.BookArgs, reply *delegateproto.BookReply) error {
+func (as *AirlineServer) PrepareCancelFlight(args delegateproto.BookArgs) (*delegateproto.BookReply, error) {
+    reply := &delegateproto.BookReply{}
+
     fmt.Println("Called PrepareCancelFlight " + args.FlightID)
     flight := as.getFlight(args.FlightID)
 
     if flight == nil {
         reply.Status = delegateproto.ENOFLIGHT
-        return nil
+        return reply, nil
     }
 
     getLock := flight.mutex.TryLock()
 
     if !getLock {
-        return errors.New("Cannot get lock")
+        return nil, errors.New("Cannot get lock")
     }
 
-    flight.preparedAction = args
+    /// WATCHOUT
+    flight.preparedAction = &args
 
     if flight.deleted {
         reply.Status = delegateproto.ENOFLIGHT
-        return nil
+        return reply, nil
     }
 
     if flight.customers[args.Email] < args.Count {
         reply.Status = delegateproto.ENOTICKET
-        return nil
+        return reply, nil
     }
 
     reply.Status = delegateproto.OK
-    return nil
+    return reply, nil
 }
 
-func (as *AirlineServer) CancelDecision(args *delegateproto.DecisionArgs, reply *delegateproto.DecisionReply) error {
+func (as *AirlineServer) CancelDecision(args delegateproto.DecisionArgs) (*delegateproto.DecisionReply, error) {
+    reply := &delegateproto.DecisionReply{}
+
     flight := as.getFlight(args.FlightID)
 
     if flight == nil {
         reply.Status = delegateproto.ENOFLIGHT
-        return nil
+        return reply, nil
     }
 
     defer flight.mutex.Unlock()
@@ -199,7 +215,7 @@ func (as *AirlineServer) CancelDecision(args *delegateproto.DecisionArgs, reply 
     if args.Decision == delegateproto.COMMIT {
         if act == nil {
             reply.Status = delegateproto.ENOPREPACT
-            return nil
+            return reply, nil
         }
         flight.customers[act.Email] -= act.Count
         if flight.customers[act.Email] == 0 {
@@ -209,21 +225,23 @@ func (as *AirlineServer) CancelDecision(args *delegateproto.DecisionArgs, reply 
     }
     
     reply.Status = delegateproto.OK
-    return nil
+    return reply, nil
 }
 
-func (as *AirlineServer) DeleteFlight(args *delegateproto.DeleteArgs, reply *delegateproto.DeleteReply) error {
+func (as *AirlineServer) DeleteFlight(args delegateproto.DeleteArgs) (*delegateproto.DeleteReply, error) {
+    reply := &delegateproto.DeleteReply{}
+
     flight := as.getFlight(args.FlightID)
 
     if flight == nil {
         reply.Status = delegateproto.ENOFLIGHT
-        return nil
+        return reply, nil
     }
 
     getLock := flight.mutex.TryLock()
 
     if !getLock {
-        return errors.New("Cannot get lock")
+        return nil, errors.New("Cannot get lock")
     }
 
     defer flight.mutex.Unlock()
@@ -238,21 +256,23 @@ func (as *AirlineServer) DeleteFlight(args *delegateproto.DeleteArgs, reply *del
     }
     flight.deleted = true
     reply.Status = delegateproto.OK
-    return nil
+    return reply, nil
 }
 
-func (as *AirlineServer) RescheduleFlight(args *delegateproto.RescheduleArgs, reply *delegateproto.RescheduleReply) error {
+func (as *AirlineServer) RescheduleFlight(args delegateproto.RescheduleArgs) (*delegateproto.RescheduleReply, error) {
+    reply := &delegateproto.RescheduleReply{}
+
     flight := as.getFlight(args.OldFlightID)
 
     if flight == nil {
         reply.Status = delegateproto.ENOFLIGHT
-        return nil
+        return reply, nil
     }
 
     getLock := flight.mutex.TryLock()
 
     if !getLock {
-        return errors.New("Cannot get lock")
+        return nil, errors.New("Cannot get lock")
     }
 
     reply.CustomerEmails = make([]string, 0)
@@ -263,15 +283,17 @@ func (as *AirlineServer) RescheduleFlight(args *delegateproto.RescheduleArgs, re
     reply.Status = delegateproto.OK
 
     flight.mutex.Unlock()
-    return nil
+    return reply, nil
 }
 
-func (as *AirlineServer) AddFlight(args *delegateproto.AddArgs, reply *delegateproto.AddReply) error {
+func (as *AirlineServer) AddFlight(args delegateproto.AddArgs) (*delegateproto.AddReply, error) {
+    reply := &delegateproto.AddReply{}
+
     flight := as.getFlight(args.Flight.FlightID)
 
     if flight != nil {
         reply.Status = delegateproto.EFLIGHTEXISTS
-        return nil
+        return reply, nil
     }
 
     flightInfo := &FlightInfo{}
@@ -286,5 +308,5 @@ func (as *AirlineServer) AddFlight(args *delegateproto.AddArgs, reply *delegatep
     reply.Status = delegateproto.OK
 
     as.flightListLock.Unlock()
-    return nil
+    return reply, nil
 }
