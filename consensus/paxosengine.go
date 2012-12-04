@@ -105,14 +105,14 @@ func (pe *PaxosEngine) Run() {
             for i:=0; i<len(pe.servers); i++ {
                 if pe.servers[i].ID == outPkt.PeerID {
 					// var reply int                   
-					pe.clients[i].Go("RPCReceiver.receiveRPC",outPkt, nil,nil)	                   
+					pe.clients[i].Go("PaxosEngine.receiveRPC",outPkt, nil,nil)	                   
                     break
                 }
             }
         case brdMSg := <- pe.brd:
             for i:=0; i<len(pe.servers); i++ {
                 // var reply int
-                pe.clients[i].Go("RPCReceiver.receiveRPC",brdMSg, nil, nil)
+                pe.clients[i].Go("PaxosEngine.receiveRPC",brdMSg, nil, nil)
             }
         case req := <- pe.prog:
 //            req.reply <- pe.progress(req.Msg.Va)		//reply to where?
