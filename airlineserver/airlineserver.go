@@ -7,6 +7,7 @@ import (
     "sync"
     "fmt"
     "errors"
+    "encoding/json"
 )
 
 type FlightInfo struct {
@@ -28,48 +29,55 @@ func NewAirlineServer () *AirlineServer {
     return as
 }
 
-func (as *AirlineServer) Progress(V paxosproto.ValueStruct) (interface{}, error) {
+func (as *AirlineServer) Progress(V *paxosproto.ValueStruct) (interface{}, error) {
     var reply interface{}
     var err error
 
     switch (V.Type) {
     case paxosproto.C_QueryFlights:
-        reply, err = as.QueryFlights(V.Action.(delegateproto.QueryArgs))
+        // reply, err = as.QueryFlights(V.Action.(delegateproto.QueryArgs))
         if err != nil {
             return nil, err
         }
     case paxosproto.C_PrepareBookFlight:
-        reply, err = as.PrepareBookFlight(V.Action.(delegateproto.BookArgs))
+        // reply, err = as.PrepareBookFlight(V.Action.(delegateproto.BookArgs))
         if err != nil {
             return nil, err
         }
     case paxosproto.C_PrepareCancelFlight:
-        reply, err = as.PrepareCancelFlight(V.Action.(delegateproto.BookArgs))
+        // reply, err = as.PrepareCancelFlight(V.Action.(delegateproto.BookArgs))
         if err != nil {
             return nil, err
         }
     case paxosproto.C_BookDecision:
-        reply, err = as.BookDecision(V.Action.(delegateproto.DecisionArgs))
+        // reply, err = as.BookDecision(V.Action.(delegateproto.DecisionArgs))
         if err != nil {
             return nil, err
         }
     case paxosproto.C_CancelDecision:
-        reply, err = as.CancelDecision(V.Action.(delegateproto.DecisionArgs))
+        // reply, err = as.CancelDecision(V.Action.(delegateproto.DecisionArgs))
         if err != nil {
             return nil, err
         }
     case paxosproto.C_DeleteFlight:
-        reply, err = as.DeleteFlight(V.Action.(delegateproto.DeleteArgs))
+        // reply, err = as.DeleteFlight(V.Action.(delegateproto.DeleteArgs))
         if err != nil {
             return nil, err
         }
     case paxosproto.C_RescheduleFlight:
-        reply, err = as.RescheduleFlight(V.Action.(delegateproto.RescheduleArgs))
+        // reply, err = as.RescheduleFlight(V.Action.(delegateproto.RescheduleArgs))
         if err != nil {
             return nil, err
         }
     case paxosproto.C_AddFlight:
-        reply, err = as.AddFlight(V.Action.(delegateproto.AddArgs))
+        data := &delegateproto.AddArgs{}
+        err := json.Unmarshal(V.Action, data)
+        if err != nil {
+            fmt.Println(err)
+            return nil, err
+        }
+
+        reply, err = as.AddFlight(data)
         if err != nil {
             return nil, err
         }
@@ -293,7 +301,7 @@ func (as *AirlineServer) RescheduleFlight(args delegateproto.RescheduleArgs) (*d
     return reply, nil
 }
 
-func (as *AirlineServer) AddFlight(args delegateproto.AddArgs) (*delegateproto.AddReply, error) {
+func (as *AirlineServer) AddFlight(args *delegateproto.AddArgs) (*delegateproto.AddReply, error) {
     reply := &delegateproto.AddReply{}
     reply.Seqnum = args.Seqnum
 

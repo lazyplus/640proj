@@ -5,6 +5,7 @@ import (
     "encoding/json"
     "strconv"
     "../paxosproto"
+    "fmt"
 )
 
 // Network Handler
@@ -37,13 +38,16 @@ func (h *iNetworkHandler) Dial(service string) error {
 // Listen on port
 func (h *iNetworkHandler) Listen(port int) error {
     server := "127.0.0.1:" + strconv.FormatInt(int64(port), 10)
+    fmt.Println("UDP Listened on " + server)
     addr, err := net.ResolveUDPAddr("udp4", server)
     if err != nil {
+        fmt.Println(err)
         return err
     }
     h.addr = addr
     h.conn, err = net.ListenUDP("udp4", h.addr)
     if err != nil {
+        fmt.Println(err)
         return err
     }
     return nil
@@ -53,10 +57,12 @@ func (h *iNetworkHandler) Listen(port int) error {
 func (n *iNetworkHandler) SendMsg(msg *paxosproto.Packet, addr *net.UDPAddr) error {
     buf, err := json.Marshal(msg)
     if err != nil {
+        fmt.Println(err)
         return err
     }
     _, err = n.conn.WriteToUDP(buf, addr)
     if err != nil {
+        fmt.Println(err)
         return err
     }
     return nil
@@ -67,6 +73,7 @@ func (h *iNetworkHandler) run() {
     buf := make([]byte, 2000)
     for {
         n, _, err := h.conn.ReadFromUDP(buf[0:])
+        // fmt.Println("Network Received")
         if err == nil {
             data := &paxosproto.Packet{}
             err := json.Unmarshal(buf[:n], data)

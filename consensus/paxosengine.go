@@ -5,14 +5,18 @@ import (
     "net/http"
     "fmt"
     "net/rpc"
+    "encoding/json"
     "../config"
     "log"
     "../paxosproto"
     "../airlineserver"
     "sync"
+    "strings"
+    "strconv"
 )
 
 type PaxosEngine struct {
+    conf *config.Config
 	numNodes int
     log map[int] *paxosproto.ValueStruct
     clients []*rpc.Client
@@ -20,6 +24,7 @@ type PaxosEngine struct {
     cur_seq int
     cur_paxos * PaxosInstance
     mutex sync.Mutex
+    name string
     in chan * paxosproto.Packet
     out chan * paxosproto.Packet
     brd chan * paxosproto.Packet
@@ -44,6 +49,8 @@ func NewPaxosEngine(path string, airline_name string, ID int) *PaxosEngine {
     pe.log = make(map[int] *paxosproto.ValueStruct)
     // read configure file
 	conf, _ := config.ReadConfigFile(path)
+    pe.conf = conf
+    pe.name = airline_name
 	airline_servers, found := conf.Airlines[airline_name]
 	if !found {
 		return nil
@@ -66,12 +73,12 @@ func NewPaxosEngine(path string, airline_name string, ID int) *PaxosEngine {
 //		peerID ++
 	}
 	// hostport := pe.servers[ID]		//the host port of this node
-	pe.in = make(chan * paxosproto.Packet)
-	pe.out = make(chan * paxosproto.Packet)
-	pe.brd = make(chan * paxosproto.Packet)
-	pe.prog = make(chan * paxosproto.Packet)
-	pe.exitCurrentPI = make(chan int)
-	pe.exitThisEngine = make(chan int)
+	pe.in = make(chan * paxosproto.Packet, 10)
+	pe.out = make(chan * paxosproto.Packet, 10)
+	pe.brd = make(chan * paxosproto.Packet, 10)
+	pe.prog = make(chan * paxosproto.Packet, 10)
+	pe.exitCurrentPI = make(chan int, 10)
+	pe.exitThisEngine = make(chan int, 10)
 	pe.cur_paxos = NewPaxosInstance( ID , pe.cur_seq ,len_list )
 	pe.cur_paxos.in = pe.in
 	pe.cur_paxos.out = pe.out
@@ -87,6 +94,7 @@ func NewPaxosEngine(path string, airline_name string, ID int) *PaxosEngine {
     pe.neth.ReadC = &pe.in
     pe.neth.Listen(pe.neth.port)
     go pe.neth.run()
+    fmt.Println("PaxosEngine serving at " + airline_servers.PeersHostPort[ID])
 
     // fmt.Println(airline_servers.PeersHostPort[ID])
 	_, listenport, _ := net.SplitHostPort(airline_servers.PeersHostPort[ID])
@@ -98,9 +106,13 @@ func NewPaxosEngine(path string, airline_name string, ID int) *PaxosEngine {
     return pe
 }
 
-func (pe *PaxosEngine) sendMsg(msg *paxosproto.Packet, hostport string) error {
-    addr, err := net.ResolveUDPAddr("udp4", hostport)
+func (pe *PaxosEngine) sendMsg(msg *paxosproto.Packet, id int) error {
+    // fmt.Println("sending pkt to " + hostport)
+    host := strings.Split(pe.conf.Airlines[pe.name].PeersHostPort[id], ":")[0]
+
+    addr, err := net.ResolveUDPAddr("udp4", host + ":" + strconv.FormatInt(int64(pe.conf.Airlines[pe.name].UDPPort[id]), 10))
     if err != nil {
+        fmt.Println(err)
         return err
     }
     pe.neth.SendMsg(msg, addr)
@@ -113,19 +125,15 @@ func (pe *PaxosEngine) run() {
         case inPkt := <- pe.in:
             pe.cur_paxos.in <- inPkt
         case outPkt := <- pe.out:
-            for i:=0; i<len(pe.servers); i++ {
-                if pe.servers[i].ID == outPkt.PeerID {
-					// var reply int                   
-					pe.sendMsg(outPkt, pe.servers[i].Port)
-                    break
-                }
-            }
+            pe.sendMsg(outPkt, outPkt.PeerID)
+
         case brdMSg := <- pe.brd:
-            for i:=0; i<len(pe.servers); i++ {
+            for i:=0; i<pe.conf.Airlines[pe.name].NumPeers; i++ {
+                pe.sendMsg(brdMSg, i)
                 // var reply int
                 // client, err := rpc.DialHTTP("tcp",addr)/
                 // if err == nil {
-                    pe.sendMsg(brdMSg, pe.servers[i].Port)
+                    
                 // }
             }
         case req := <- pe.prog:
@@ -137,19 +145,22 @@ func (pe *PaxosEngine) run() {
     }
 }
 
-func (pe *PaxosEngine) progress(V paxosproto.ValueStruct) interface{} {
+func (pe *PaxosEngine) progress(V *paxosproto.ValueStruct) interface{} {
     reply, err := pe.as.Progress(V)
+    // V.reply = make([]byte, len(reply))
+    // copy(V.reply, reply)
     pe.cur_seq ++
     pe.exitCurrentPI <- 1
     pe.cur_paxos = NewPaxosInstance(pe.peerID, pe.cur_seq, pe.numNodes)
 
     if err != nil {
+        fmt.Println(err)
     	nop_v := &paxosproto.ValueStruct{}
     	nop_v.Type = paxosproto.C_NOP
     	pe.log[pe.cur_seq] = nop_v
     	return nil
     }
-	pe.log[pe.cur_seq] = &V
+	pe.log[pe.cur_seq] = V
 	return reply
 }
 
@@ -167,6 +178,9 @@ func (pe *PaxosEngine) Propose(V * paxosproto.ValueStruct, reply * paxosproto.Re
     pe.mutex.Lock()
     defer pe.mutex.Unlock()
 
+    fmt.Println("Propose Called")
+    fmt.Println(V)
+
     //check log
     found, index := pe.checkLog(V)
     if found {		//already commited
@@ -175,21 +189,25 @@ func (pe *PaxosEngine) Propose(V * paxosproto.ValueStruct, reply * paxosproto.Re
     	reply.Reply = pe.log[index].Reply
 		return nil
     }
+
+    fmt.Println("No log found")
     
     var Status int
     var Vp * paxosproto.ValueStruct
 
     for {
+        fmt.Println("preparing")
         Status, Vp = pe.cur_paxos.Prepare()
         if Status == paxosproto.PREPARE_BEHIND {
             //pe.ReqProgress(Vp)
-            pe.progress(*Vp)
+            pe.progress(Vp)
         } else {
             break
         }
     }
     
     if Status == paxosproto.PREPARE_REJECT {
+        fmt.Println("prepare rejected")
         reply.Status = paxosproto.Propose_RETRY
         return nil
     }
@@ -198,14 +216,30 @@ func (pe *PaxosEngine) Propose(V * paxosproto.ValueStruct, reply * paxosproto.Re
         Vp = V
     }
 
+    fmt.Println("sending accept")
+    fmt.Println(Vp)
     OK := pe.cur_paxos.Accept()
     if OK == -1 {
+        fmt.Println("Accept failed")
         reply.Status = paxosproto.Propose_FAIL
         return nil
     }
 
     pe.cur_paxos.Commit() 
-	reply.Reply = pe.progress(*Vp)
+    fmt.Println("{Progessing}")
+    rpl := pe.progress(Vp)
+
+    fmt.Println("{Progessed}")
+    fmt.Println(rpl)
+    buf, err := json.Marshal(rpl)
+    if err != nil {
+        fmt.Println(err)
+        return err
+    }
+
+	reply.Reply = make([]byte, len(buf))
+    copy(reply.Reply, buf)
+    reply.Type = V.Type
  	reply.Status = paxosproto.Propose_OK
     return nil
 }

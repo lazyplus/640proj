@@ -37,13 +37,13 @@ type NodeStruct struct {
 type ValueStruct struct {
     CoordSeq int
     Type int
-    Action interface{}
-    Reply interface{}
+    Action []byte
+    Reply []byte
     Host string
 }
 
 type ReplyStruct struct {
-	Reply interface{}
+	Reply []byte
 	Type int
 	Status int
 }
@@ -58,6 +58,6 @@ type MsgStruct struct {
     Type int
     Na int
     Myn int
-    Va ValueStruct
+    Va *ValueStruct
 }
 

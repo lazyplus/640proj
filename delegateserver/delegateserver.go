@@ -1,6 +1,7 @@
 package main
 
 import (
+    "runtime"
 	"../delegateimpl"
     "../delegateproto"
     "flag"
@@ -17,6 +18,7 @@ var airline_name *string = flag.String("name","1","The airline name that the del
 var path *string = flag.String("path","config/config","The path that config files are.")
 
 func main() {
+    runtime.GOMAXPROCS(10)
     flag.Parse()
     ds := delegateimpl.NewDelegate(*path, *airline_name)
 
