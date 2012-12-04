@@ -108,6 +108,7 @@ type PaxosInstance struct {
     PrefailNodes int
     AcpacceptedNodes int
     AcpfailNodes int
+    running bool
 }
 
 type MsgStruct struct {

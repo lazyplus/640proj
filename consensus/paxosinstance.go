@@ -17,22 +17,35 @@ func NewPaxosInstance(peerID int, seq int, numNodes int) *PaxosInstance {
     pi.Myn = generate_random_number(peerID,numNodes)
     pi.prepareCh = make(chan * MsgStruct)
     pi.acceptCh = make(chan * MsgStruct)
+    pi.running = true
+    go pi.Run()
     return pi
 }
 
 func (pi *PaxosInstance) Run() {
-	finishPrepare := false
-	finishAccept := false
-	finishCommit := false
+	// finishPrepare := false
+	// finishAccept := false
+	// finishCommit := false
 	
-    for {
+    for pi.running {
         select{
         case inPkt := <- pi.in:
-            switch(inPkt.Msg.Type){
-            case PREPARE:
+            if inPkt.Msg.Type == PREPARE {
                 handlePrepare(inPkt)
+                break
+            }
+
+            if inPkt.Msg.Seq != pi.seq {
+                break
+            }
+
+            switch(inPkt.Msg.Type){
             case PREPARE_OK:
 				pi.PreaccepteNodes ++
+                if pi.Na < inPkt.Msg.Na {
+                    pi.Na = inPkt.Msg.Na
+                    pi.Va = inPkt.Msg.Va
+                }
 				if (pi.PreaccepteNodes > (numNodes/2)) && !finishPrepare {
 					finishPrepare = true
 					pi.prepareCh <- inPkt.Msg
@@ -44,6 +57,7 @@ func (pi *PaxosInstance) Run() {
  					pi.prepareCh <- inPkt.Msg
                 }
             case PREPARE_BEHIND:
+                pi.Va = inPkt.Msg.Va
             	if !finishPrepare {
             		finishPrepare = true
 					pi.prepareCh <- inPkt.Msg
@@ -65,12 +79,9 @@ func (pi *PaxosInstance) Run() {
             case COMMIT:
                 handleCommit(inPkt)
             }
-        case <- pi.shouldExit:
-            break
         }
     }
 }
-
 
 func (pi *PaxosInstance) initPkt () *Packet {
 	p := &Packet{}
@@ -89,7 +100,7 @@ func (pi *PaxosInstance) handlePrepare(pkt Packet) {
         newPkt.Msg.Va = pi.log[pkt.Msg.Seq]
         pi.out <- newPkt
     }
-    if msg.Na < pi.Na {
+    if msg.Na < pi.Nh {
         // reply prepare rejected
  		newPkt = pi.initPkt()
  		newPkt.PeerID = pkt.PeerID
@@ -106,7 +117,6 @@ func (pi *PaxosInstance) handlePrepare(pkt Packet) {
         pi.out <- newPkt
     }
 }
-
 
 func (pi *PaxosInstance) handleAccept(pkt Packet) {
 	msg := pkt.Msg
@@ -137,10 +147,10 @@ func (pi *PaxosInstance) handleCommit() {
 	pi.prog <- newPkt
 }
 
-func (pi *PaxosInstance) prepare() (int, ValueStruct) {
+func (pi *PaxosInstance) Prepare() (int, ValueStruct) {
     msg := &MsgStruct{}
     msg.Type = PREPARE
-    msg.Na = pi.Myn
+    // msg.Na = pi.Myn
     newPkt := &Packet{pi.PeerID,msg}
     pi.brd <- newPkt 
     p := <- pi.prepareCh //wait for the reply

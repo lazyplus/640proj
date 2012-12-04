@@ -133,7 +133,7 @@ func (pe *PaxosEngine) Propose(V * ValueStruct, reply * replyStruct) {
     var Vp ValueStruct
 
     for {
-        Status, Vp = pe.cur_paxos.prepare()
+        Status, Vp = pe.cur_paxos.Prepare()
         if Status == PREPARE_BEHIND {
             //pe.ReqProgress(Vp)
             pe.Progress(Vp)
@@ -151,13 +151,13 @@ func (pe *PaxosEngine) Propose(V * ValueStruct, reply * replyStruct) {
         Vp = *V
     }
 
-    OK = pe.cur_paxos.accept(Vp)
+    OK = pe.cur_paxos.Accept(Vp)
     if OK == -1 {
         reply.Status = Propose_FAILED
         return nil
     }
 
-    pe.cur_paxos.commit(Vp) 
+    pe.cur_paxos.Commit(Vp) 
 
     //reply.Result = pe.ReqProgress(Vp)
 	reply.Result = pe.Progress(Vp)
