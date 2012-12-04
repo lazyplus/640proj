@@ -1,0 +1,10 @@
+UDP Listened on 127.0.0.1:21303
+PaxosEngine serving at localhost:12303
+Handling Accept
+&{0 0xf8400f7180}
+accepting
+go into progress
+After get flight
+after airline sever's progress
+after init a new PI
+after successfully write into log

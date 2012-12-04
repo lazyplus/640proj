@@ -59,7 +59,7 @@ func main() {
             return
         }
     }
-    coordRPC, _ := rpc.DialHTTP("tcp", conf.CoordHostPort)
+//    coordRPC, _ := rpc.DialHTTP("tcp", conf.CoordHostPort)
 
     cmd := flag.Arg(0)
     for et:=0; et < *numTimes; et++ {

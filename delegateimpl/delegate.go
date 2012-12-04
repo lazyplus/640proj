@@ -25,12 +25,13 @@ func NewDelegate(path string, airline_name string) *Delegate {
 	return dg
 }
 
-func (dg *Delegate) Push(V paxosproto.ValueStruct) []byte {
+func (dg *Delegate) Push(V * paxosproto.ValueStruct) *paxosproto.ReplyStruct{
     index := 0
     fmt.Println("Pushing ")
     fmt.Println(V)
     for ; ; index = (index + 1) % dg.conf.NumPeers {
-        var reply []byte
+//        var reply []byte
+		reply := &paxosproto.ReplyStruct{}
         client, err := rpc.DialHTTP("tcp", dg.conf.PeersHostPort[index])
         if err != nil {
             // fmt.Println("Peer " + dg.conf.PeersHostPort[index] + " dead")
@@ -38,13 +39,13 @@ func (dg *Delegate) Push(V paxosproto.ValueStruct) []byte {
         }
         fmt.Println("Calling Propose to " + dg.conf.PeersHostPort[index])
         fmt.Println(V)
-        err = client.Call("PaxosEngine.Propose", V, &reply)
+        err = client.Call("PaxosEngine.Propose", V, reply)
         if err != nil {
             fmt.Println(err)
             client.Close()
             continue
         }
-        if reply != nil {
+        if reply != nil && reply.Status == paxosproto.Propose_OK {
             fmt.Println("got reply")
             fmt.Println(reply)
             client.Close()
@@ -128,7 +129,7 @@ func (dg *Delegate) RescheduleFlight(args * delegateproto.RescheduleArgs, reply 
 
 func (dg *Delegate) AddFlight(args * delegateproto.AddArgs, reply * delegateproto.AddReply) error {
     fmt.Println("AddFlight Called")
-    V := paxosproto.ValueStruct{}
+    V := &paxosproto.ValueStruct{}
     buf, _ := json.Marshal(*args)
     V.Action = make([]byte, len(buf))
     copy(V.Action, buf)
@@ -136,9 +137,11 @@ func (dg *Delegate) AddFlight(args * delegateproto.AddArgs, reply * delegateprot
     V.CoordSeq = args.Seqnum
     V.Type = paxosproto.C_AddFlight
     rpl := dg.Push(V)
-    err := json.Unmarshal(rpl, reply)
-    if err != nil {
-        fmt.Println(err)
+    if rpl.Status == paxosproto.Propose_OK {
+   	 err := json.Unmarshal(rpl.Reply, reply)
+   	 if err != nil {
+    	    fmt.Println(err)
+    	}
     }
     return nil
 }

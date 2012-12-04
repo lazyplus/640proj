@@ -309,7 +309,7 @@ func (as *AirlineServer) AddFlight(args *delegateproto.AddArgs) (*delegateproto.
     reply.Seqnum = args.Seqnum
 
     flight := as.getFlight(args.Flight.FlightID)
-	fmt.Println("After get flight")
+
     if flight != nil {
         reply.Status = delegateproto.EFLIGHTEXISTS
         return reply, nil

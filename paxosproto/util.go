@@ -57,7 +57,7 @@ type MsgStruct struct {
     Seq int
     Type int
     Na int
-    Myn int
+//    Myn int
     Va *ValueStruct
 }
 

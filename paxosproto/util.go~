@@ -20,6 +20,7 @@ const (
 	C_DeleteFlight
 	C_RescheduleFlight
 	C_AddFlight
+    C_NOP
 )
 
 const (
@@ -33,20 +34,16 @@ type NodeStruct struct {
 	ID int	
 }
 
-type RPCStruct struct {
-	in chan * Packet
-}
-
 type ValueStruct struct {
     CoordSeq int
     Type int
-    Action interface{}
-    Reply interface{}
+    Action []byte
+    Reply []byte
     Host string
 }
 
-type replyStruct struct {
-	reply interface{}
+type ReplyStruct struct {
+	Reply []byte
 	Type int
 	Status int
 }
@@ -61,6 +58,6 @@ type MsgStruct struct {
     Type int
     Na int
     Myn int
-    Va ValueStruct
+    Va *ValueStruct
 }
 
