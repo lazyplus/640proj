@@ -16,8 +16,10 @@ type BookArgs struct {
     Flights []string
     Email string
     Count int
+    Seq	int
 }
 
 type BookReply struct {
     Status int
+    Seq int
 }
