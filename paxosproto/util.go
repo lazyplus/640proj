@@ -20,6 +20,7 @@ const (
 	C_DeleteFlight
 	C_RescheduleFlight
 	C_AddFlight
+    C_NOP
 )
 
 const (

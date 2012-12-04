@@ -5,53 +5,69 @@ import (
     "os"
     "bufio"
     "strings"
-    "container/list"
+    "fmt"
 )
 
+type AirlineConfig struct {
+    Name string
+    DelegateHostPort string
+    NumPeers int
+    PeersHostPort []string
+}
+
 type Config struct {
-    NumAirline     int
-    //AirlineAddr    map[string] string
-    AirlineAddr 	map[string] *List 
-    CoordAddr       string
+    NumAirline int
+    Airlines map[string] *AirlineConfig
+    CoordHostPort string
 }
 
 func ReadConfigFile (path string) (*Config, error) {
-    in := &Config{}
+    conf := &Config{}
+    conf.Airlines = make(map[string] *AirlineConfig)
 
-    //in.AirlineAddr = make(map[string] string)
-    in.AirlineAddr = make(map[string] *List)
-    userFile := path
-    fin, err := os.Open(userFile)
+    fin, err := os.Open(path)
     defer fin.Close()
 
     if err != nil {
         return nil, err
     }
 
-    in.NumAirline = -1
-    cur := 0
+    var line string
     rf := bufio.NewReader(fin)
-    for{
-        s, err2 := rf.ReadString('\n')
-        s = strings.TrimSpace(s)
-        if err2 != nil {
-            return nil, err2
+    line, err = rf.ReadString('\n')
+    conf.NumAirline, _ = strconv.Atoi(strings.TrimSpace(line))
+    conf.Airlines = make(map[string] *AirlineConfig)
+
+    for i:=0; i<conf.NumAirline; i++ {
+        line, err = rf.ReadString('\n')
+        parts := strings.Split(line, " ")
+        ac := &AirlineConfig{}
+        ac.Name = parts[0]
+        ac.NumPeers, _ = strconv.Atoi(strings.TrimSpace(parts[1]))
+        ac.PeersHostPort = make([]string, ac.NumPeers)
+        line, err = rf.ReadString('\n')
+        ac.DelegateHostPort = strings.TrimSpace(line)
+        for j:=0; j<ac.NumPeers; j++ {
+            line, err = rf.ReadString('\n')
+            ac.PeersHostPort[j] = strings.TrimSpace(line)
         }
-        if in.NumAirline == -1 {
-            in.NumAirline , _ = strconv.Atoi(s)
-        }else if cur < in.NumAirline{
-        	tmp_server_list := List.New()
-            ss := strings.Split(s,"\t")
-            airline_servers := strings.Split(ss[1],",")
-            for i:=0;i<len(airline_servers);i++ {
-            	tmp_server_list.PushBack(airline_servers[i])
-            }
-            in.AirlineAddr[ss[0]] = tmp_server_list
-            cur ++
-        }else{
-            in.CoordAddr = s
-            break
+        conf.Airlines[ac.Name] = ac
+    }
+
+    line, err = rf.ReadString('\n')
+    conf.CoordHostPort = line
+
+    return conf, nil
+}
+
+func DumpConfig(conf *Config) {
+    fmt.Println(conf.NumAirline)
+    for _, value := range(conf.Airlines) {
+        fmt.Println(value.Name + " " + strconv.FormatInt(int64(value.NumPeers), 10))
+        fmt.Println(value.DelegateHostPort)
+        for i:=0; i<value.NumPeers; i++ {
+            fmt.Println(value.PeersHostPort[i])
         }
     }
-    return in, nil
+    fmt.Println(conf.CoordHostPort)
 }

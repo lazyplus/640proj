@@ -86,6 +86,7 @@ func (as *AirlineServer) getFlight(id string) *FlightInfo {
 
 func (as *AirlineServer) QueryFlights(args delegateproto.QueryArgs) (*delegateproto.QueryReply, error) {
     reply := &delegateproto.QueryReply{}
+    reply.Seqnum = args.Seqnum
 
     as.flightListLock.Lock()
     defer as.flightListLock.Unlock()
@@ -103,6 +104,7 @@ func (as *AirlineServer) QueryFlights(args delegateproto.QueryArgs) (*delegatepr
 
 func (as *AirlineServer) PrepareBookFlight(args delegateproto.BookArgs) (*delegateproto.BookReply, error) {
     reply := &delegateproto.BookReply{}
+    reply.Seqnum = args.Seqnum
 
     flight := as.getFlight(args.FlightID)
 
@@ -137,6 +139,7 @@ func (as *AirlineServer) PrepareBookFlight(args delegateproto.BookArgs) (*delega
 
 func (as *AirlineServer) BookDecision(args delegateproto.DecisionArgs) (*delegateproto.DecisionReply, error) {
     reply := &delegateproto.DecisionReply{}
+    reply.Seqnum = args.Seqnum
 
     flight := as.getFlight(args.FlightID)
 
@@ -165,6 +168,7 @@ func (as *AirlineServer) BookDecision(args delegateproto.DecisionArgs) (*delegat
 
 func (as *AirlineServer) PrepareCancelFlight(args delegateproto.BookArgs) (*delegateproto.BookReply, error) {
     reply := &delegateproto.BookReply{}
+    reply.Seqnum = args.Seqnum
 
     fmt.Println("Called PrepareCancelFlight " + args.FlightID)
     flight := as.getFlight(args.FlightID)
@@ -199,6 +203,7 @@ func (as *AirlineServer) PrepareCancelFlight(args delegateproto.BookArgs) (*dele
 
 func (as *AirlineServer) CancelDecision(args delegateproto.DecisionArgs) (*delegateproto.DecisionReply, error) {
     reply := &delegateproto.DecisionReply{}
+    reply.Seqnum = args.Seqnum
 
     flight := as.getFlight(args.FlightID)
 
@@ -230,6 +235,7 @@ func (as *AirlineServer) CancelDecision(args delegateproto.DecisionArgs) (*deleg
 
 func (as *AirlineServer) DeleteFlight(args delegateproto.DeleteArgs) (*delegateproto.DeleteReply, error) {
     reply := &delegateproto.DeleteReply{}
+    reply.Seqnum = args.Seqnum
 
     flight := as.getFlight(args.FlightID)
 
@@ -261,6 +267,7 @@ func (as *AirlineServer) DeleteFlight(args delegateproto.DeleteArgs) (*delegatep
 
 func (as *AirlineServer) RescheduleFlight(args delegateproto.RescheduleArgs) (*delegateproto.RescheduleReply, error) {
     reply := &delegateproto.RescheduleReply{}
+    reply.Seqnum = args.Seqnum
 
     flight := as.getFlight(args.OldFlightID)
 
@@ -288,6 +295,7 @@ func (as *AirlineServer) RescheduleFlight(args delegateproto.RescheduleArgs) (*d
 
 func (as *AirlineServer) AddFlight(args delegateproto.AddArgs) (*delegateproto.AddReply, error) {
     reply := &delegateproto.AddReply{}
+    reply.Seqnum = args.Seqnum
 
     flight := as.getFlight(args.Flight.FlightID)
 
