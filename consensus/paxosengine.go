@@ -27,15 +27,8 @@ type PaxosEngine struct {
 	exitCurrentPI chan int
 	exitThisEngine chan int
     peerID int
-    // network
-    RPCReceiver *RPCStruct
     // airlineserver
     as *airlineserver.AirlineServer
-}
-
-
-type RPCStruct struct {
-	in chan * paxosproto.Packet
 }
 
 //when open a Paxos Engine, the airline name and the peer ID of this server(node) should
@@ -49,23 +42,26 @@ func NewPaxosEngine(path string, airline_name string, ID int) *PaxosEngine {
     pe.log = make(map[int] *paxosproto.ValueStruct)
     // read configure file
 	conf, _ := config.ReadConfigFile(path)
-	airline_server_list, found := conf.AirlineAddr[airline_name]
+	airline_servers, found := conf.Airlines[airline_name]
 	if !found {
 		return nil
 	}	
-	len_list := airline_server_list.Len()
+	airline_server_list := airline_servers.PeersHostPort
+	len_list := len(airline_server_list)
 	pe.numNodes = len_list
 	pe.servers = make([]*paxosproto.NodeStruct,len_list)
 	pe.clients = make([]*rpc.Client,len_list)
-	for e := airline_server_list.Front(); e != nil; e = e.Next() {
-		addr := e.Value
-		pe.servers[peerID] = &paxosproto.NodeStruct{addr.(string),peerID}
-		client, err := rpc.DialHTTP("tcp",addr.(string))
+	//for e := airline_server_list.Front(); e != nil; e = e.Next() {
+	for peerID=0; peerID < len_list; peerID ++ {
+//		addr := e.Value
+		addr := airline_server_list[peerID]
+		pe.servers[peerID] = &paxosproto.NodeStruct{addr,peerID}
+		client, err := rpc.DialHTTP("tcp",addr)
 		if err != nil {
 			log.Fatal("dialing:", err)
 		}
 		pe.clients[peerID] = client
-		peerID ++
+//		peerID ++
 	}
 	hostport := pe.servers[ID]		//the host port of this node
 	pe.in = make(chan * paxosproto.Packet)
@@ -81,9 +77,8 @@ func NewPaxosEngine(path string, airline_name string, ID int) *PaxosEngine {
 	pe.cur_paxos.prog = pe.prog
 	pe.cur_paxos.log = pe.log
 	pe.cur_paxos.shouldExit = pe.exitCurrentPI
-	pe.RPCReceiver = new(RPCStruct)
-	pe.RPCReceiver.in = pe.in
-	rpc.Register(pe.RPCReceiver)
+	go pe.Run()
+	rpc.Register(pe)
 	rpc.HandleHTTP()
 	_, listenport, _ := net.SplitHostPort(hostport.Port)
 	l, e := net.Listen("tcp",listenport)
@@ -91,14 +86,13 @@ func NewPaxosEngine(path string, airline_name string, ID int) *PaxosEngine {
 		log.Fatal("listen error:", e)
 	}
 	go http.Serve(l,nil)
-	go pe.Run()
     return pe
 }
 
 //use RPC to coordinate between engines
 //pass the msg to the channel
-func (rpcrecv * RPCStruct) receiveRPC ( args * paxosproto.Packet, reply * int) {
-	rpcrecv.in <- args
+func (pe * PaxosEngine) receiveRPC ( args * paxosproto.Packet, reply * int) {
+	pe.in <- args
 	reply = nil
 }
 
