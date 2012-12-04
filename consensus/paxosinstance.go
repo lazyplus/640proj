@@ -148,7 +148,7 @@ func (pi *PaxosInstance) handleAccept(pkt paxosproto.Packet) {
     }else{
         pi.Na = msg.Na
         pi.Va = msg.Va
-        pi.Nh = msg.Nh
+        pi.Nh = msg.Na
         // reply accept OK
         newPkt := pi.initPkt()
         newPkt.PeerID = pkt.PeerID
@@ -161,7 +161,7 @@ func (pi *PaxosInstance) handleCommit() {
 	//receive commit, notify paxosengine to record the log and take action
 	newPkt := pi.initPkt()
 	newPkt.PeerID = pi.PeerID
-	newPkt.Msg.Type = paxosproto.COMMIT_OK
+	newPkt.Msg.Type = paxosproto.COMMIT
 	newPkt.Msg.Va = pi.Va
 	pi.prog <- newPkt
 }

@@ -7,6 +7,7 @@ import (
     "../config"
     "log"
     "../paxosproto"
+    "../airlineserver"
     "sync"
 )
 
@@ -28,6 +29,8 @@ type PaxosEngine struct {
     peerID int
     // network
     RPCReceiver *RPCStruct
+    // airlineserver
+    as *airlineserver.AirlineServer
 }
 
 
@@ -39,6 +42,8 @@ type RPCStruct struct {
 // be provided
 func NewPaxosEngine(path string, airline_name string, ID int) *PaxosEngine {
     pe := &PaxosEngine{}
+    pe.as = airlineserver.NewAirlineServer()
+
     pe.cur_seq = 0
     peerID := 0
     pe.log = make(map[int] *paxosproto.ValueStruct)
@@ -105,14 +110,14 @@ func (pe *PaxosEngine) Run() {
         case outPkt := <- pe.out:
             for i:=0; i<len(pe.servers); i++ {
                 if pe.servers[i].ID == outPkt.PeerID {
-					var reply int                   
+					// var reply int                   
 					pe.clients[i].Go("RPCReceiver.receiveRPC",outPkt, nil,nil)	                   
                     break
                 }
             }
         case brdMSg := <- pe.brd:
             for i:=0; i<len(pe.servers); i++ {
-                var reply int
+                // var reply int
                 pe.clients[i].Go("RPCReceiver.receiveRPC",brdMSg, nil, nil)
             }
         case req := <- pe.prog:
@@ -135,11 +140,9 @@ func (pe *PaxosEngine) progress(V paxosproto.ValueStruct) interface{} {
     	nop_v.Type = paxosproto.C_NOP
     	pe.log[pe.cur_seq] = nop_v
     	return nil
-    }else{
-    	pe.log[pe.cur_seq] = &V
-    	return reply	
     }
-    
+	pe.log[pe.cur_seq] = &V
+	return reply
 }
 
 func (pe * PaxosEngine) CheckLog(V * paxosproto.ValueStruct) (bool,int) {
