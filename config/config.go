@@ -13,6 +13,7 @@ type AirlineConfig struct {
     DelegateHostPort string
     NumPeers int
     PeersHostPort []string
+    UDPPort []int
 }
 
 type Config struct {
@@ -45,11 +46,15 @@ func ReadConfigFile (path string) (*Config, error) {
         ac.Name = parts[0]
         ac.NumPeers, _ = strconv.Atoi(strings.TrimSpace(parts[1]))
         ac.PeersHostPort = make([]string, ac.NumPeers)
+        ac.UDPPort = make([]int, ac.NumPeers)
         line, err = rf.ReadString('\n')
         ac.DelegateHostPort = strings.TrimSpace(line)
         for j:=0; j<ac.NumPeers; j++ {
             line, err = rf.ReadString('\n')
-            ac.PeersHostPort[j] = strings.TrimSpace(line)
+            line = strings.TrimSpace(line)
+            ss := strings.Split(line, " ")
+            ac.PeersHostPort[j] = ss[0]
+            ac.UDPPort[j], _ = strconv.Atoi(ss[1])
         }
         conf.Airlines[ac.Name] = ac
     }
@@ -66,7 +71,7 @@ func DumpConfig(conf *Config) {
         fmt.Println(value.Name + " " + strconv.FormatInt(int64(value.NumPeers), 10))
         fmt.Println(value.DelegateHostPort)
         for i:=0; i<value.NumPeers; i++ {
-            fmt.Println(value.PeersHostPort[i])
+            fmt.Println(value.PeersHostPort[i] + " " + strconv.FormatInt(int64(value.UDPPort[i]), 10))
         }
     }
     fmt.Println(conf.CoordHostPort)

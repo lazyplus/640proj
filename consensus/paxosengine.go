@@ -3,6 +3,7 @@ package consensus
 import (
     "net"
     "net/http"
+    "fmt"
     "net/rpc"
     "../config"
     "log"
@@ -10,7 +11,6 @@ import (
     "../airlineserver"
     "sync"
 )
-
 
 type PaxosEngine struct {
 	numNodes int
@@ -29,6 +29,8 @@ type PaxosEngine struct {
     peerID int
     // airlineserver
     as *airlineserver.AirlineServer
+
+    neth iNetworkHandler
 }
 
 //when open a Paxos Engine, the airline name and the peer ID of this server(node) should
@@ -56,14 +58,14 @@ func NewPaxosEngine(path string, airline_name string, ID int) *PaxosEngine {
 //		addr := e.Value
 		addr := airline_server_list[peerID]
 		pe.servers[peerID] = &paxosproto.NodeStruct{addr,peerID}
-		client, err := rpc.DialHTTP("tcp",addr)
-		if err != nil {
-			log.Fatal("dialing:", err)
-		}
-		pe.clients[peerID] = client
+		// client, err := rpc.DialHTTP("tcp",addr)
+		// if err != nil {
+			// log.Fatal("dialing:", err)
+		// }
+		// pe.clients[peerID] = client
 //		peerID ++
 	}
-	hostport := pe.servers[ID]		//the host port of this node
+	// hostport := pe.servers[ID]		//the host port of this node
 	pe.in = make(chan * paxosproto.Packet)
 	pe.out = make(chan * paxosproto.Packet)
 	pe.brd = make(chan * paxosproto.Packet)
@@ -77,11 +79,18 @@ func NewPaxosEngine(path string, airline_name string, ID int) *PaxosEngine {
 	pe.cur_paxos.prog = pe.prog
 	pe.cur_paxos.log = pe.log
 	pe.cur_paxos.shouldExit = pe.exitCurrentPI
-	go pe.Run()
+	go pe.run()
 	rpc.Register(pe)
 	rpc.HandleHTTP()
-	_, listenport, _ := net.SplitHostPort(hostport.Port)
-	l, e := net.Listen("tcp",listenport)
+
+    pe.neth.port = airline_servers.UDPPort[ID]
+    pe.neth.ReadC = &pe.in
+    pe.neth.Listen(pe.neth.port)
+    go pe.neth.run()
+
+    // fmt.Println(airline_servers.PeersHostPort[ID])
+	_, listenport, _ := net.SplitHostPort(airline_servers.PeersHostPort[ID])
+	l, e := net.Listen("tcp", fmt.Sprintf(":%s", listenport))
 	if e!=nil {
 		log.Fatal("listen error:", e)
 	}
@@ -89,14 +98,16 @@ func NewPaxosEngine(path string, airline_name string, ID int) *PaxosEngine {
     return pe
 }
 
-//use RPC to coordinate between engines
-//pass the msg to the channel
-func (pe * PaxosEngine) receiveRPC ( args * paxosproto.Packet, reply * int) {
-	pe.in <- args
-	reply = nil
+func (pe *PaxosEngine) sendMsg(msg *paxosproto.Packet, hostport string) error {
+    addr, err := net.ResolveUDPAddr("udp4", hostport)
+    if err != nil {
+        return err
+    }
+    pe.neth.SendMsg(msg, addr)
+    return nil
 }
 
-func (pe *PaxosEngine) Run() {
+func (pe *PaxosEngine) run() {
     for {
         select{
         case inPkt := <- pe.in:
@@ -105,14 +116,17 @@ func (pe *PaxosEngine) Run() {
             for i:=0; i<len(pe.servers); i++ {
                 if pe.servers[i].ID == outPkt.PeerID {
 					// var reply int                   
-					pe.clients[i].Go("PaxosEngine.receiveRPC",outPkt, nil,nil)	                   
+					pe.sendMsg(outPkt, pe.servers[i].Port)
                     break
                 }
             }
         case brdMSg := <- pe.brd:
             for i:=0; i<len(pe.servers); i++ {
                 // var reply int
-                pe.clients[i].Go("PaxosEngine.receiveRPC",brdMSg, nil, nil)
+                // client, err := rpc.DialHTTP("tcp",addr)/
+                // if err == nil {
+                    pe.sendMsg(brdMSg, pe.servers[i].Port)
+                // }
             }
         case req := <- pe.prog:
 //            req.reply <- pe.progress(req.Msg.Va)		//reply to where?
@@ -139,7 +153,7 @@ func (pe *PaxosEngine) progress(V paxosproto.ValueStruct) interface{} {
 	return reply
 }
 
-func (pe * PaxosEngine) CheckLog(V * paxosproto.ValueStruct) (bool,int) {
+func (pe * PaxosEngine) checkLog(V * paxosproto.ValueStruct) (bool,int) {
 	//no need to lock
 	for i:=0;i<len(pe.log);i++ {
 		if pe.log[i].CoordSeq == V.CoordSeq {
@@ -149,17 +163,17 @@ func (pe * PaxosEngine) CheckLog(V * paxosproto.ValueStruct) (bool,int) {
 	return false,-1
 }
 
-func (pe *PaxosEngine) Propose(V * paxosproto.ValueStruct, reply * paxosproto.ReplyStruct) {
+func (pe *PaxosEngine) Propose(V * paxosproto.ValueStruct, reply * paxosproto.ReplyStruct) error {
     pe.mutex.Lock()
     defer pe.mutex.Unlock()
 
     //check log
-    found, index := pe.CheckLog(V)
+    found, index := pe.checkLog(V)
     if found {		//already commited
     	reply.Status = paxosproto.Propose_OK
     	reply.Type = pe.log[index].Type
     	reply.Reply = pe.log[index].Reply
-		return
+		return nil
     }
     
     var Status int
@@ -177,7 +191,7 @@ func (pe *PaxosEngine) Propose(V * paxosproto.ValueStruct, reply * paxosproto.Re
     
     if Status == paxosproto.PREPARE_REJECT {
         reply.Status = paxosproto.Propose_RETRY
-        return 
+        return nil
     }
 
     if Vp == nil {
@@ -187,11 +201,11 @@ func (pe *PaxosEngine) Propose(V * paxosproto.ValueStruct, reply * paxosproto.Re
     OK := pe.cur_paxos.Accept()
     if OK == -1 {
         reply.Status = paxosproto.Propose_FAIL
-        return 
+        return nil
     }
 
     pe.cur_paxos.Commit() 
 	reply.Reply = pe.progress(*Vp)
  	reply.Status = paxosproto.Propose_OK
-    return 
+    return nil
 }

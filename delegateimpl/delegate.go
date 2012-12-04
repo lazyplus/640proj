@@ -10,8 +10,6 @@ import (
 
 type Delegate struct {
     conf *config.AirlineConfig
-    // Action interface{}
-    // timer chan interface{}
 }
 
 func NewDelegate(path string, airline_name string) *Delegate {
