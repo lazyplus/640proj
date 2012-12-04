@@ -1,10 +1,5 @@
 package paxosproto
 
-import (
-	"net/rpc"
-	"sync"
-)
-
 const (
 	PREPARE = iota
 	PREPARE_OK
@@ -38,29 +33,6 @@ type NodeStruct struct {
 	ID int	
 }
 
-type RPCStruct struct {
-	in chan * Packet
-}
-
-type PaxosEngine struct {
-	numNodes int
-    log map[int] *ValueStruct
-    clients []*rpc.Client
-    servers []*NodeStruct
-    cur_seq int
-    cur_paxos PaxosInstance
-    mutex sync.Mutex
-    in chan * MsgStruct
-    out chan * Packet
-    brd chan * Packet
-	prog chan * Packet
-	exitCurrentPI chan int
-	exitThisEngine chan int
-    peerID int
-    // network
-    RPCReceiver * RPCStruct
-}
-
 type ValueStruct struct {
     CoordSeq int
     Type int
@@ -69,8 +41,8 @@ type ValueStruct struct {
     Host string
 }
 
-type replyStruct struct {
-	reply interface{}
+type ReplyStruct struct {
+	Reply interface{}
 	Type int
 	Status int
 }
@@ -78,29 +50,6 @@ type replyStruct struct {
 type Packet struct {
     PeerID int
     Msg * MsgStruct
-}
-
-type PaxosInstance struct {
-	log map[int] *ValueStruct
-    out chan * Packet
-    brd chan * Packet
-    in chan * MsgStruct
-    prog chan * Packet
-    prepareCh chan * MsgStruct
-    acceptCh chan * MsgStruct
-    shouldExit chan int
-	Na int
-	Nh int
-	Myn int
-	Va ValueStruct
-    seq int
-    PeerID int
-    numNodes int
-    PreaccepteNodes int
-    PrefailNodes int
-    AcpacceptedNodes int
-    AcpfailNodes int
-    running bool
 }
 
 type MsgStruct struct {
