@@ -26,38 +26,29 @@ func NewDelegate(path string, airline_name string) *Delegate {
 }
 
 func (dg *Delegate) Push(V * paxosproto.ValueStruct) *paxosproto.ReplyStruct{
-    index := 0
-    fmt.Println("Pushing ")
-    fmt.Println(V)
-    for ; ; index = (index + 1) % dg.conf.NumPeers {
-//        var reply []byte
+    for index := 0; ; index = (index + 1) % dg.conf.NumPeers {
 		reply := &paxosproto.ReplyStruct{}
         client, err := rpc.DialHTTP("tcp", dg.conf.PeersHostPort[index])
         if err != nil {
-            // fmt.Println("Peer " + dg.conf.PeersHostPort[index] + " dead")
             continue
         }
-        fmt.Println("Calling Propose to " + dg.conf.PeersHostPort[index])
-        fmt.Println(V)
+        // fmt.Println("Calling Propose to " + dg.conf.PeersHostPort[index])
         err = client.Call("PaxosEngine.Propose", V, reply)
         if err != nil {
             fmt.Println(err)
             client.Close()
             continue
         }
-        if reply != nil {
-            if reply.Status == paxosproto.Propose_OK {
-                fmt.Println("got reply")
-                fmt.Println(reply)
-                client.Close()
-                return reply
-            }
-            if reply.Status == paxosproto.Propose_RETRY {
-                fmt.Println("got Retry")
-                index = index + dg.conf.NumPeers - 1
-                client.Close()
-                continue
-            }
+        if reply.Status == paxosproto.Propose_OK {
+            // fmt.Println("got reply")
+            client.Close()
+            return reply
+        }
+        if reply.Status == paxosproto.Propose_RETRY {
+            // fmt.Println("got Retry")
+            index = index + dg.conf.NumPeers - 1
+            client.Close()
+            continue
         }
         time.Sleep(time.Second)
     }
@@ -83,7 +74,6 @@ func (dg *Delegate) PrepareBookFlight(args * delegateproto.BookArgs, reply * del
 }
 
 func (dg *Delegate) BookDecision(args * delegateproto.DecisionArgs, reply * delegateproto.DecisionReply) error {
-    fmt.Println("Delegate BookDecision Called")
     r := dg.doPush(*args, paxosproto.C_BookDecision, args.Seqnum, *reply)
     err := json.Unmarshal(r, reply)
     if err != nil {

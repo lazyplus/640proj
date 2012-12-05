@@ -32,8 +32,8 @@ func NewAirlineServer () *AirlineServer {
 func (as *AirlineServer) Progress(V *paxosproto.ValueStruct) (interface{}, error) {
     var reply interface{}
 
-    fmt.Println("AirlineServer Progress Called")
-    fmt.Println(V)
+    // fmt.Println("AirlineServer Progress Called")
+    // fmt.Println(V)
 
     switch (V.Type) {
     case paxosproto.C_QueryFlights:
@@ -63,7 +63,7 @@ func (as *AirlineServer) Progress(V *paxosproto.ValueStruct) (interface{}, error
         }
         
 
-        fmt.Println("AirlineServer Calling PrepareBookFlight")
+        // fmt.Println("AirlineServer Calling PrepareBookFlight")
 
         reply, err = as.PrepareBookFlight(data)
         if err != nil {
@@ -80,7 +80,7 @@ func (as *AirlineServer) Progress(V *paxosproto.ValueStruct) (interface{}, error
             fmt.Println(err)
             return nil, err
         }
-        fmt.Println("AirlineServer Calling PrepareCancelFlight")
+        // fmt.Println("AirlineServer Calling PrepareCancelFlight")
         reply, err = as.PrepareCancelFlight(data)
         if err != nil {
             fmt.Println("PrepareCancelFlight error")
@@ -97,7 +97,7 @@ func (as *AirlineServer) Progress(V *paxosproto.ValueStruct) (interface{}, error
             return nil, err
         }
 
-        fmt.Println("AirlineServer Calling BookDecision")
+        // fmt.Println("AirlineServer Calling BookDecision")
         
         reply, err = as.BookDecision(data)
         if err != nil {
@@ -114,7 +114,7 @@ func (as *AirlineServer) Progress(V *paxosproto.ValueStruct) (interface{}, error
             fmt.Println(err)
             return nil, err
         }
-        fmt.Println("AirlineServer Calling CancelDecision")
+        // fmt.Println("AirlineServer Calling CancelDecision")
         reply, err = as.CancelDecision(data)
         if err != nil {
             fmt.Println("CancelDecision error")
@@ -161,7 +161,7 @@ func (as *AirlineServer) Progress(V *paxosproto.ValueStruct) (interface{}, error
             fmt.Println(err)
             return nil, err
         }
-		fmt.Println("AirlineServer Calling AddFlight")
+		// fmt.Println("AirlineServer Calling AddFlight")
         reply, err = as.AddFlight(data)
         if err != nil {
         	fmt.Println("addflight error")
@@ -238,8 +238,8 @@ func (as *AirlineServer) BookDecision(args *delegateproto.DecisionArgs) (*delega
 
     flight := as.getFlight(args.FlightID)
 
-    fmt.Println("AirlineServer: BookDecision Called")
-    fmt.Println(flight)
+    // fmt.Println("AirlineServer: BookDecision Called")
+    // fmt.Println(flight)
 
     if flight == nil {
         reply.Status = delegateproto.ENOFLIGHT
@@ -268,7 +268,7 @@ func (as *AirlineServer) PrepareCancelFlight(args *delegateproto.BookArgs) (*del
     reply := &delegateproto.BookReply{}
     reply.Seqnum = args.Seqnum
 
-    fmt.Println("Called PrepareCancelFlight " + args.FlightID)
+    // fmt.Println("Called PrepareCancelFlight " + args.FlightID)
     flight := as.getFlight(args.FlightID)
 
     if flight == nil {
@@ -414,6 +414,6 @@ func (as *AirlineServer) AddFlight(args *delegateproto.AddArgs) (*delegateproto.
 
     as.flightListLock.Unlock()
 
-    fmt.Println("AirlineServer: Added Flight " + args.Flight.FlightID)
+    // fmt.Println("AirlineServer: Added Flight " + args.Flight.FlightID)
     return reply, nil
 }

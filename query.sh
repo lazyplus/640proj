@@ -8,5 +8,3 @@ go run libclient/libclient.go -n 40 c shit@fuck.com:3:2:1-1:3-1 &
 go run libclient/libclient.go -n 40 c shit@fuck.com:2:1:3-1 &
 go run libclient/libclient.go -n 40 c shit@fuck.com:2:1:2-1 &
 
-sleep 60
-
