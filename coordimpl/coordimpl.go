@@ -29,6 +29,8 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 	//assume the flight ID is in format: airline + "::" + ID 
 	co.map_lock.Lock()
 	defer co.map_lock.Unlock()
+
+	co.coordSeq ++ 
 	//first round
 	ls := len(args.Flights)
 	id_ls := list.New()
@@ -53,7 +55,7 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 		if err != nil {
 			return err
 		}
-		bookcall := client.Go("AirlineServerRPC.PrepareBookFlight",args_out, reply,nil)
+		bookcall := client.Go("DelegateServerRPC.PrepareBookFlight",args_out, reply,nil)
 		id_ls.PushBack(id)
 		wait_ls[id] = bookcall
 		reply_ls[id] = reply
@@ -73,6 +75,7 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 		}
 	}
 	
+	co.coordSeq ++ 
 	//second phase
 	wait_ls2 := make(map[string] *rpc.Call)
 	reply_ls2 := make(map[string] *delegateproto.DecisionReply)
@@ -102,7 +105,7 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 	if shouldAbort {
 		ori_reply.Status = coordproto.ENOFLIGHT
 	}
-	co.coordSeq ++ 
+
 	return nil
 }
 
@@ -110,6 +113,7 @@ func (co *coordserver) CancelFlights(args *coordproto.BookArgs, ori_reply *coord
 	co.map_lock.Lock()
 	defer co.map_lock.Unlock()
 	
+	co.coordSeq ++ 
 	ls := len(args.Flights)
 	id_ls := list.New()
 	wait_ls := make(map[string] *rpc.Call)
@@ -151,6 +155,7 @@ func (co *coordserver) CancelFlights(args *coordproto.BookArgs, ori_reply *coord
 			final_status = reply.Status
 		}
 	}
+	co.coordSeq ++ 
 	//second phase
 	wait_ls2 := make(map[string] *rpc.Call)
 	reply_ls2 := make(map[string] *delegateproto.DecisionReply)
@@ -160,7 +165,7 @@ func (co *coordserver) CancelFlights(args *coordproto.BookArgs, ori_reply *coord
 		client, _ := client_ls[ss]
 		args_out := &delegateproto.DecisionArgs{should_commit,ss,co.coordSeq}
 		reply := &delegateproto.DecisionReply{}
-		call := client.Go("AirlineServerRPC.CancelDecision",args_out,reply, nil)
+		call := client.Go("DelegateServerRPC.CancelDecision",args_out,reply, nil)
 		wait_ls2[ss] = call
 		reply_ls2[ss] = reply
 	}
@@ -180,7 +185,6 @@ func (co *coordserver) CancelFlights(args *coordproto.BookArgs, ori_reply *coord
 	if shouldAbort {
 		ori_reply.Status = coordproto.ENOFLIGHT
 	}
-	co.coordSeq++
 	return nil	
 }
 
@@ -188,18 +192,74 @@ func (co *coordserver) CancelFlights(args *coordproto.BookArgs, ori_reply *coord
 func (co *coordserver) QueryFlights(args * coordproto.QueryArgs, reply * coordproto.QueryReply) error {
 	co.map_lock.Lock()
 	defer co.map_lock.Unlock()
+
+	fmt.Println("QueryFlights")
+	dargs := &delegateproto.QueryArgs{}
+
+	dargs.StartTime = args.StartTime
+	dargs.EndTime = args.EndTime
+	co.coordSeq ++
+	dargs.Seqnum = co.coordSeq
+	reply.FlightList = make([]delegateproto.FlightStruct, 0)
+	for key, value := range(co.airline_info.Airlines) {
+		fmt.Println("Querying airline " + key)
+		var dreply delegateproto.QueryReply
+		cli, err := rpc.DialHTTP("tcp", value.DelegateHostPort)
+		if err == nil {
+			cli.Call("DelegateServerRPC.QueryFlights", dargs, &dreply)
+			reply.Status = dreply.Status
+			reply.FlightList = append(reply.FlightList, dreply.FlightList...)
+			cli.Close()
+		}
+	}
 	return nil
 }
 
-func (co *coordserver) DeleteFlight(* coordproto.DeleteArgs, * coordproto.DeleteReply) error {
+func (co *coordserver) DeleteFlight(args * coordproto.DeleteArgs, reply * coordproto.DeleteReply) error {
 	co.map_lock.Lock()
 	defer co.map_lock.Unlock()
+
+	fmt.Println("DeleteFlight")
+	dargs := &delegateproto.DeleteArgs{}
+
+	dargs.FlightID = args.FlightID
+	co.coordSeq ++
+	dargs.Seqnum = co.coordSeq
+
+	fmt.Println("deleting flight " + args.FlightID)
+	asname := strings.Split(dargs.FlightID, "-")[0]
+	var dreply delegateproto.DeleteReply
+	cli, err := rpc.DialHTTP("tcp", co.airline_info.Airlines[asname].DelegateHostPort)
+	if err == nil {
+		cli.Call("DelegateServerRPC.DeleteFlight", dargs, &dreply)
+		reply.Status = dreply.Status
+		reply.CustomerEmails = dreply.CustomerEmails
+		cli.Close()
+	}
 	return nil
 }
 
-func (co *coordserver) RescheduleFlight(* coordproto.RescheduleArgs, * coordproto.RescheduleReply) error {
+func (co *coordserver) RescheduleFlight(args * coordproto.RescheduleArgs, reply * coordproto.RescheduleReply) error {
 	co.map_lock.Lock()
 	defer co.map_lock.Unlock()
+
+	fmt.Println("RescheduleFlight")
+	dargs := &delegateproto.RescheduleArgs{}
+	dargs.OldFlightID = args.OldFlightID
+	dargs.NewFlight = args.NewFlight
+	co.coordSeq ++
+	dargs.Seqnum = co.coordSeq
+	asname := strings.Split(dargs.OldFlightID, "-")[0]
+	fmt.Println("Adding to airline " + asname)
+	var dreply delegateproto.RescheduleReply
+	cli, err := rpc.DialHTTP("tcp", co.airline_info.Airlines[asname].DelegateHostPort)
+	if err == nil {
+		cli.Call("DelegateServerRPC.RescheduleFlight", dargs, &dreply)
+		reply.Status = dreply.Status
+		reply.CustomerEmails = dreply.CustomerEmails
+		return nil
+	}
+	reply.Status = coordproto.ENOAIRLINE
 	return nil
 }
 
@@ -211,8 +271,8 @@ func (co *coordserver) AddFlight(args * coordproto.AddArgs, reply * coordproto.A
 	fmt.Println(args.Flight)
 	dargs := &delegateproto.AddArgs{}
 	dargs.Flight = args.Flight
-	dargs.Seqnum = co.coordSeq
 	co.coordSeq ++
+	dargs.Seqnum = co.coordSeq
 	asname := strings.Split(dargs.Flight.FlightID, "-")[0]
 	fmt.Println("Adding to airline " + asname)
 	var dreply delegateproto.AddReply

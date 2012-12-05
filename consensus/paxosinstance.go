@@ -71,7 +71,7 @@ func (pi *PaxosInstance) Run() {
                 break
             }
 
-            if inPkt.Msg.Seq != pi.seq {
+            if inPkt.Msg.Seq < pi.seq {
                 break
             }
 
@@ -125,13 +125,19 @@ func (pi *PaxosInstance) initPkt () *paxosproto.Packet {
 
 func (pi *PaxosInstance) handlePrepare(pkt * paxosproto.Packet) {
 	msg := pkt.Msg
+    fmt.Println("Get prepare, my seq")
+    fmt.Println(pi.seq)
+    fmt.Println("msg seq is ")
+    fmt.Println(pkt.Msg.Seq)
     if pkt.Msg.Seq < pi.seq {
         // reply prepare behind
         newPkt := pi.initPkt()
         newPkt.PeerID = pkt.PeerID
+        newPkt.Msg.Seq = pkt.Msg.Seq
         newPkt.Msg.Type = paxosproto.PREPARE_BEHIND
         newPkt.Msg.Va = (*pi.log)[pkt.Msg.Seq]
         pi.out <- newPkt
+        return
     }
     if msg.Na < pi.Nh {
         // reply prepare rejected

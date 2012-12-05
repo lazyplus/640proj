@@ -45,11 +45,19 @@ func (dg *Delegate) Push(V * paxosproto.ValueStruct) *paxosproto.ReplyStruct{
             client.Close()
             continue
         }
-        if reply != nil && reply.Status == paxosproto.Propose_OK {
-            fmt.Println("got reply")
-            fmt.Println(reply)
-            client.Close()
-            return reply
+        if reply != nil {
+            if reply.Status == paxosproto.Propose_OK {
+                fmt.Println("got reply")
+                fmt.Println(reply)
+                client.Close()
+                return reply
+            }
+            if reply.Status == paxosproto.Propose_RETRY {
+                fmt.Println("got Retry")
+                index = index + dg.conf.NumPeers - 1
+                client.Close()
+                continue
+            }
         }
         time.Sleep(time.Second)
     }
@@ -57,91 +65,88 @@ func (dg *Delegate) Push(V * paxosproto.ValueStruct) *paxosproto.ReplyStruct{
 }
 
 func (dg *Delegate) PrepareCancelFlight(args * delegateproto.BookArgs, reply * delegateproto.BookReply) error {
-    // make up Value
-    V := paxosproto.ValueStruct{}
-    // V.Action = args
-    V.Host = dg.conf.DelegateHostPort
-    V.CoordSeq = args.Seqnum
-    V.Type = paxosproto.C_PrepareCancelFlight
-    // reply = dg.Push(V).(*delegateproto.BookReply)
-    return nil
-}
-
-func (dg *Delegate) QueryFlights(args * delegateproto.QueryArgs, reply * delegateproto.QueryReply) error {
-    V := paxosproto.ValueStruct{}
-    // V.Action = args
-    V.Host = dg.conf.DelegateHostPort
-    V.CoordSeq = args.Seqnum
-    V.Type = paxosproto.C_QueryFlights
-    // reply = dg.Push(V).(*delegateproto.QueryReply)
+    r := dg.doPush(*args, paxosproto.C_PrepareCancelFlight, args.Seqnum, *reply)
+    err := json.Unmarshal(r, reply)
+    if err != nil {
+        fmt.Println(err)
+    }
     return nil
 }
 
 func (dg *Delegate) PrepareBookFlight(args * delegateproto.BookArgs, reply * delegateproto.BookReply) error {
-    V := paxosproto.ValueStruct{}
-    // V.Action = args
-    V.Host = dg.conf.DelegateHostPort
-    V.CoordSeq = args.Seqnum
-    V.Type = paxosproto.C_PrepareBookFlight
-    // reply = dg.Push(V).(*delegateproto.BookReply)
+    r := dg.doPush(*args, paxosproto.C_PrepareBookFlight, args.Seqnum, *reply)
+    err := json.Unmarshal(r, reply)
+    if err != nil {
+        fmt.Println(err)
+    }
     return nil
 }
 
 func (dg *Delegate) BookDecision(args * delegateproto.DecisionArgs, reply * delegateproto.DecisionReply) error {
-    V := paxosproto.ValueStruct{}
-    // V.Action = args
-    V.Host = dg.conf.DelegateHostPort
-    V.CoordSeq = args.Seqnum
-    V.Type = paxosproto.C_BookDecision
-    // reply = dg.Push(V).(*delegateproto.DecisionReply)
+    fmt.Println("Delegate BookDecision Called")
+    r := dg.doPush(*args, paxosproto.C_BookDecision, args.Seqnum, *reply)
+    err := json.Unmarshal(r, reply)
+    if err != nil {
+        fmt.Println(err)
+    }
     return nil
 }
 
 func (dg *Delegate) CancelDecision(args * delegateproto.DecisionArgs, reply * delegateproto.DecisionReply) error {
-    V := paxosproto.ValueStruct{}
-    // V.Action = args
-    V.Host = dg.conf.DelegateHostPort
-    V.CoordSeq = args.Seqnum
-    V.Type = paxosproto.C_CancelDecision
-    // reply = dg.Push(V).(*delegateproto.DecisionReply)
+    r := dg.doPush(*args, paxosproto.C_CancelDecision, args.Seqnum, *reply)
+    err := json.Unmarshal(r, reply)
+    if err != nil {
+        fmt.Println(err)
+    }
     return nil
 }
 
 func (dg *Delegate) DeleteFlight(args * delegateproto.DeleteArgs, reply * delegateproto.DeleteReply) error {
-    V := paxosproto.ValueStruct{}
-    // V.Action = args
-    V.Host = dg.conf.DelegateHostPort
-    V.CoordSeq = args.Seqnum
-    V.Type = paxosproto.C_DeleteFlight
-    // reply = dg.Push(V).(*delegateproto.DeleteReply)
+    r := dg.doPush(*args, paxosproto.C_DeleteFlight, args.Seqnum, *reply)
+    err := json.Unmarshal(r, reply)
+    if err != nil {
+        fmt.Println(err)
+    }
     return nil
 }
 
 func (dg *Delegate) RescheduleFlight(args * delegateproto.RescheduleArgs, reply * delegateproto.RescheduleReply) error {
-    V := paxosproto.ValueStruct{}
-    // V.Action = args
-    V.Host = dg.conf.DelegateHostPort
-    V.CoordSeq = args.Seqnum
-    V.Type = paxosproto.C_RescheduleFlight
-    // reply = dg.Push(V).(*delegateproto.RescheduleReply)
+    r := dg.doPush(*args, paxosproto.C_RescheduleFlight, args.Seqnum, *reply)
+    err := json.Unmarshal(r, reply)
+    if err != nil {
+        fmt.Println(err)
+    }
+    return nil
+}
+
+func (dg *Delegate) QueryFlights(args * delegateproto.QueryArgs, reply * delegateproto.QueryReply) error {
+    r := dg.doPush(*args, paxosproto.C_QueryFlights, args.Seqnum, *reply)
+    err := json.Unmarshal(r, reply)
+    if err != nil {
+        fmt.Println(err)
+    }
     return nil
 }
 
 func (dg *Delegate) AddFlight(args * delegateproto.AddArgs, reply * delegateproto.AddReply) error {
-    fmt.Println("AddFlight Called")
+    r := dg.doPush(*args, paxosproto.C_AddFlight, args.Seqnum, *reply)
+    err := json.Unmarshal(r, reply)
+    if err != nil {
+        fmt.Println(err)
+    }
+    return nil
+}
+
+func (dg *Delegate) doPush(args interface{}, t int, seq int, reply interface{}) []byte {
     V := &paxosproto.ValueStruct{}
-    buf, _ := json.Marshal(*args)
+    buf, _ := json.Marshal(args)
     V.Action = make([]byte, len(buf))
     copy(V.Action, buf)
-    V.Host = dg.conf.DelegateHostPort
-    V.CoordSeq = args.Seqnum
-    V.Type = paxosproto.C_AddFlight
+    V.CoordSeq = seq
+    V.Type = t
     rpl := dg.Push(V)
     if rpl.Status == paxosproto.Propose_OK {
-   	 err := json.Unmarshal(rpl.Reply, reply)
-   	 if err != nil {
-    	    fmt.Println(err)
-    	}
+        return rpl.Reply
     }
     return nil
 }

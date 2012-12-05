@@ -74,6 +74,7 @@ func NewPaxosEngine(path string, airline_name string, ID int) *PaxosEngine {
 		// pe.clients[peerID] = client
 //		peerID ++
 	}
+    pe.peerID = ID
 	// hostport := pe.servers[ID]		//the host port of this node
 	pe.in = make(chan * paxosproto.Packet, 10)
 	pe.out = make(chan * paxosproto.Packet, 10)
@@ -245,7 +246,8 @@ func (pe *PaxosEngine) Propose(V * paxosproto.ValueStruct, reply * paxosproto.Re
             //pe.ReqProgress(Vp)
             // pe.progress(Vp)
             pe.prog <- Vp
-            // return
+            reply.Status = paxosproto.Propose_RETRY
+            return nil
         } else {
             break
         }

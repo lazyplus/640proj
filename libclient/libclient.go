@@ -50,15 +50,6 @@ func main() {
     // config.DumpConfig(conf)
 
     var err error
-    serverRPC := make(map[string] *rpc.Client)
-    for key, value := range(conf.Airlines) {
-        fmt.Println(value.DelegateHostPort)
-        serverRPC[key], err = rpc.DialHTTP("tcp", value.DelegateHostPort)
-        if err != nil {
-            fmt.Printf("Could not connect to server %s, returning nil\n", value.DelegateHostPort)
-            return
-        }
-    }
     fmt.Println(conf.CoordHostPort)
     var coordRPC *rpc.Client
     coordRPC, err = rpc.DialHTTP("tcp", conf.CoordHostPort)
@@ -83,19 +74,16 @@ func main() {
             args := &delegateproto.DeleteArgs{}
             var reply delegateproto.DeleteReply
             args.FlightID = flag.Arg(1)
-            airlineserver := strings.Split(args.FlightID, "-")[0]
-            serverRPC[airlineserver].Call("DelegateServerRPC.DeleteFlight", args, &reply)
+            coordRPC.Call("CoordinatorRPC.DeleteFlight", args, &reply)
             fmt.Println(*args, reply)
         case "q":
             args := &delegateproto.QueryArgs{}
             parts := strings.Split(flag.Arg(1), ":")
             args.StartTime, _ = strconv.ParseInt(parts[0], 10, 64)
             args.EndTime, _ = strconv.ParseInt(parts[1], 10, 64)
-            for _, value := range(serverRPC) {
-                var reply delegateproto.QueryReply
-                value.Call("DelegateServerRPC.QueryFlights", args, &reply)
-                fmt.Println("q", *args, reply)
-            }
+            var reply delegateproto.QueryReply
+            coordRPC.Call("CoordinatorRPC.QueryFlights", args, &reply)
+            fmt.Println("q", *args, reply)
         case "r":
             flightStr := flag.Arg(1)
             flight := parseFlight(flightStr)
@@ -103,8 +91,7 @@ func main() {
             var reply delegateproto.RescheduleReply
             args.NewFlight = *flight
             args.OldFlightID = flight.FlightID
-            airlineserver := strings.Split(flight.FlightID, "-")[0]
-            serverRPC[airlineserver].Call("DelegateServerRPC.RescheduleFlight", args, &reply)
+            coordRPC.Call("CoordinatorRPC.RescheduleFlight", args, &reply)
             fmt.Println(*args, reply)
         case "b":
             argStr := flag.Arg(1)
@@ -139,9 +126,6 @@ func main() {
         }
     }
 
-    for _, value := range(serverRPC) {
-        value.Close()
-    }
    coordRPC.Close()
 
     fmt.Println("Libclient Finished")
