@@ -7,6 +7,7 @@ const (
     ENOTICKET
     EFLIGHTEXISTS
     ENOPREPACT
+    ETEMP
 )
 
 const (

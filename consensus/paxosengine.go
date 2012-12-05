@@ -153,18 +153,41 @@ func (pe *PaxosEngine) run() {
 }
 
 func (pe *PaxosEngine) progress(V *paxosproto.ValueStruct) interface{} {
+    // fmt.Println("Getting Lock")
     pe.mutex.Lock()
     defer pe.mutex.Unlock()
+    // fmt.Println("Got Lock")
+    if V == nil {
+        fmt.Println("Warning: Progressing nil")
+    }
 
     reply, err := pe.as.Progress(V)
     // V.reply = make([]byte, len(reply))
     // copy(V.reply, reply)
     // fmt.Println("after airline sever's progress")
-    pe.log[pe.cur_seq] = V
+    // if err != nil {
+    //     fmt.Println(err)
+    //     nop_v := &paxosproto.ValueStruct{}
+    //     nop_v.Type = paxosproto.C_NOP
+    //     // pe.log[pe.cur_seq] = nop_v
+    //     return nil
+    // }
+    if err == nil {
+        buf, err := json.Marshal(reply)
+        if err != nil {
+            fmt.Println(err)
+        }
+        V.Reply = make([]byte, len(buf))
+        copy(V.Reply, buf)
+        pe.log[pe.cur_seq] = V
+    } else {
+        nop_v := &paxosproto.ValueStruct{}
+        nop_v.Type = paxosproto.C_NOP
+        pe.log[pe.cur_seq] = nop_v
+    }
+    
     pe.cur_seq ++
-//    pe.cur_paxos.running = false
 	pe.exitCurrentPI <- 1
-	// pe.in = 
 	pe.out = make(chan * paxosproto.Packet, 10)
 	pe.brd = make(chan * paxosproto.Packet, 10)
 	pe.prog = make(chan * paxosproto.ValueStruct, 10)
@@ -178,21 +201,8 @@ func (pe *PaxosEngine) progress(V *paxosproto.ValueStruct) interface{} {
 	pe.cur_paxos.shouldExit = &pe.exitCurrentPI
     go pe.cur_paxos.Run()
 	// fmt.Println("after init a new PI")
-    if err != nil {
-        fmt.Println(err)
-    	nop_v := &paxosproto.ValueStruct{}
-    	nop_v.Type = paxosproto.C_NOP
-    	pe.log[pe.cur_seq] = nop_v
-    	return nil
-    }
-    buf, err := json.Marshal(reply)
-    if err != nil {
-    	fmt.Println(err)
-    }
-    V.Reply = make([]byte, len(buf))
-    copy(V.Reply, buf)
     
-	
+
 	// fmt.Println("after successfully write into log")
 	
 	return reply
@@ -214,7 +224,7 @@ func (pe *PaxosEngine) Propose(V * paxosproto.ValueStruct, reply * paxosproto.Re
     defer pe.mutex.Unlock()
 
     if pe.cur_paxos.Finished {
-        reply.Status = paxosproto.Propose_RETRY
+        reply.Status = paxosproto.Propose_FAIL
         return nil
     }
 
@@ -224,7 +234,7 @@ func (pe *PaxosEngine) Propose(V * paxosproto.ValueStruct, reply * paxosproto.Re
     found, index := pe.checkLog(V)
     if found {		//already commited
     	// fmt.Println("got log")
-    	fmt.Println(index)
+    	fmt.Println(pe.cur_seq, index)
     	reply.Status = paxosproto.Propose_OK
     	reply.Type = pe.log[index].Type
     	reply.Reply = make([]byte, len(pe.log[index].Reply))
@@ -238,10 +248,11 @@ func (pe *PaxosEngine) Propose(V * paxosproto.ValueStruct, reply * paxosproto.Re
     var Vp * paxosproto.ValueStruct
 
     for {
-        // fmt.Println("preparing")
+        // fmt.Println(pe.cur_seq, "preparing")
         Status, Vp = pe.cur_paxos.Prepare()
         // fmt.Println("Prepare returned")
         if Status == paxosproto.PREPARE_BEHIND {
+            fmt.Println("Learning", pe.cur_seq)
             pe.prog <- Vp
             reply.Status = paxosproto.Propose_RETRY
             return nil
@@ -251,8 +262,8 @@ func (pe *PaxosEngine) Propose(V * paxosproto.ValueStruct, reply * paxosproto.Re
     }
     
     if Status == paxosproto.PREPARE_REJECT {
-        fmt.Println("prepare rejected")
-        reply.Status = paxosproto.Propose_RETRY
+        fmt.Println(pe.cur_seq, "prepare rejected")
+        reply.Status = paxosproto.Propose_FAIL
         return nil
     }
 
@@ -260,16 +271,22 @@ func (pe *PaxosEngine) Propose(V * paxosproto.ValueStruct, reply * paxosproto.Re
         Vp = V
     }
 
-    // fmt.Println("sending accept")
+    // if pe.as.Defer(Vp) {
+        // reply.Status = paxosproto.Propose_RETRY
+        // return nil
+    // }
+
+    // fmt.Println(pe.cur_seq, "sending accept")
 
     OK := pe.cur_paxos.Accept(Vp)
     if OK == -1 {
-        fmt.Println("Accept failed")
+        fmt.Println(pe.cur_seq, "Accept failed")
         reply.Status = paxosproto.Propose_FAIL
         return nil
     }
 
-    pe.cur_paxos.Commit()
+    pe.cur_paxos.Commit(Vp)
+    fmt.Println(pe.cur_seq, "committing")    
     pe.cur_paxos.Finished = true
  	reply.Status = paxosproto.Propose_RETRY
  	return nil

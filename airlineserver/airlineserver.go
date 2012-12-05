@@ -168,6 +168,8 @@ func (as *AirlineServer) Progress(V *paxosproto.ValueStruct) (interface{}, error
         	fmt.Println(err)
             return nil, err
         }
+    case paxosproto.C_NOP:
+        return nil, errors.New("NOP")
     }
     return reply, nil
 }
@@ -211,8 +213,12 @@ func (as *AirlineServer) PrepareBookFlight(args *delegateproto.BookArgs) (*deleg
     getLock := flight.mutex.TryLock()
 
     if !getLock {
-        return nil, errors.New("Cannot get lock")
+        return nil, errors.New("Cannot get lock of " + args.FlightID)
+        // reply.Status = delegateproto.ETEMP
+        // return reply, nil
     }
+
+    // fmt.Println("acquiring lock of " + args.FlightID)
 
     /// WATCHOUT
     flight.preparedAction = args
@@ -238,7 +244,7 @@ func (as *AirlineServer) BookDecision(args *delegateproto.DecisionArgs) (*delega
 
     flight := as.getFlight(args.FlightID)
 
-    // fmt.Println("AirlineServer: BookDecision Called")
+    
     // fmt.Println(flight)
 
     if flight == nil {
@@ -246,6 +252,7 @@ func (as *AirlineServer) BookDecision(args *delegateproto.DecisionArgs) (*delega
         return reply, nil
     }
 
+    // fmt.Println("releasing lock of " + args.FlightID)
     defer flight.mutex.Unlock()
 
     act := flight.preparedAction
@@ -279,8 +286,11 @@ func (as *AirlineServer) PrepareCancelFlight(args *delegateproto.BookArgs) (*del
     getLock := flight.mutex.TryLock()
 
     if !getLock {
-        return nil, errors.New("Cannot get lock")
+        return nil, errors.New("Cannot get lock of " + args.FlightID)
+        // reply.Status = delegateproto.ETEMP
+        // return reply, nil
     }
+    // fmt.Println("acquiring lock of " + args.FlightID)
 
     /// WATCHOUT
     flight.preparedAction = args
@@ -309,7 +319,7 @@ func (as *AirlineServer) CancelDecision(args *delegateproto.DecisionArgs) (*dele
         reply.Status = delegateproto.ENOFLIGHT
         return reply, nil
     }
-
+    // fmt.Println("releasing lock of " + args.FlightID)
     defer flight.mutex.Unlock()
 
     act := flight.preparedAction
@@ -345,7 +355,9 @@ func (as *AirlineServer) DeleteFlight(args *delegateproto.DeleteArgs) (*delegate
     getLock := flight.mutex.TryLock()
 
     if !getLock {
-        return nil, errors.New("Cannot get lock")
+        // return nil, errors.New("Cannot get lock")
+        reply.Status = delegateproto.ETEMP
+        return reply, nil
     }
 
     defer flight.mutex.Unlock()

@@ -20,6 +20,13 @@ func (l *PLock) TryLock() bool {
     return false
 }
 
+func (l *PLock) IsLocked() bool {
+    l.cnt_lock.Lock()
+    defer l.cnt_lock.Unlock()
+
+    return l.cnt == 1
+}
+
 func (l* PLock) SpinLock() {
     for ret := l.TryLock(); !ret; ret = l.TryLock() {
     }

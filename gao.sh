@@ -1,6 +1,6 @@
 while true
 do
 	./query.sh
-	sleep 20
+	sleep 30
 done
 
