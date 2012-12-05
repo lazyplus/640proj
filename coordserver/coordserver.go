@@ -9,7 +9,7 @@ import (
     "log"
     "net/http"
     "net/rpc"
-    "strconv"
+    // "strconv"
 )
 
 var portnum *int = flag.Int("port", 0, "port # to listen on. nodes default to using an ephemeral port (0).")
@@ -23,10 +23,10 @@ func main() {
     }
     _, listenport, _ := net.SplitHostPort(l.Addr().String())
     log.Println("Server starting on ", listenport)
-    *portnum, _ = strconv.Atoi(listenport)
+    // *portnum, _ = strconv.Atoi(listenport)
     co := coordimpl.NewCoordinator(*path)
-
     corpc := coordrpc.NewCoordinatorRPC(co)
+    fmt.Println("Serving")
     rpc.Register(corpc)
     rpc.HandleHTTP()
     http.Serve(l, nil)

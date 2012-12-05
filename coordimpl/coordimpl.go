@@ -183,3 +183,45 @@ func (co *coordserver) CancelFlights(args *coordproto.BookArgs, ori_reply *coord
 	co.coordSeq++
 	return nil	
 }
+
+
+func (co *coordserver) QueryFlights(args * coordproto.QueryArgs, reply * coordproto.QueryReply) error {
+	co.map_lock.Lock()
+	defer co.map_lock.Unlock()
+	return nil
+}
+
+func (co *coordserver) DeleteFlight(* coordproto.DeleteArgs, * coordproto.DeleteReply) error {
+	co.map_lock.Lock()
+	defer co.map_lock.Unlock()
+	return nil
+}
+
+func (co *coordserver) RescheduleFlight(* coordproto.RescheduleArgs, * coordproto.RescheduleReply) error {
+	co.map_lock.Lock()
+	defer co.map_lock.Unlock()
+	return nil
+}
+
+func (co *coordserver) AddFlight(args * coordproto.AddArgs, reply * coordproto.AddReply) error {
+	co.map_lock.Lock()
+	defer co.map_lock.Unlock()
+
+	fmt.Println("Adding Flight")
+	fmt.Println(args.Flight)
+	dargs := &delegateproto.AddArgs{}
+	dargs.Flight = args.Flight
+	dargs.Seqnum = co.coordSeq
+	co.coordSeq ++
+	asname := strings.Split(dargs.Flight.FlightID, "-")[0]
+	fmt.Println("Adding to airline " + asname)
+	var dreply delegateproto.AddReply
+	cli, err := rpc.DialHTTP("tcp", co.airline_info.Airlines[asname].DelegateHostPort)
+	if err == nil {
+		cli.Call("DelegateServerRPC.AddFlight", dargs, &dreply)
+		reply.Status = dreply.Status
+		return nil
+	}
+	reply.Status = coordproto.ENOAIRLINE
+	return nil
+}

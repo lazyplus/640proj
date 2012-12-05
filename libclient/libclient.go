@@ -59,7 +59,13 @@ func main() {
             return
         }
     }
-    coordRPC, _ := rpc.DialHTTP("tcp", conf.CoordHostPort)
+    fmt.Println(conf.CoordHostPort)
+    var coordRPC *rpc.Client
+    coordRPC, err = rpc.DialHTTP("tcp", conf.CoordHostPort)
+    if err != nil {
+        fmt.Printf("Could not connect to server %s, returning nil\n", conf.CoordHostPort)
+        return
+    }
 
     cmd := flag.Arg(0)
     for et:=0; et < *numTimes; et++ {
@@ -67,12 +73,11 @@ func main() {
         case "a":
             flightStr := flag.Arg(1)
             flight := parseFlight(flightStr)
-            args := &delegateproto.AddArgs{}
-            var reply delegateproto.AddReply
+            args := &coordproto.AddArgs{}
+            var reply coordproto.AddReply
             args.Flight = *flight
-            airlineserver := strings.Split(flight.FlightID, "-")[0]
             fmt.Println("Calling RPC")
-            serverRPC[airlineserver].Call("DelegateServerRPC.AddFlight", args, &reply)
+            coordRPC.Call("CoordinatorRPC.AddFlight", args, &reply)
             fmt.Println(*args, reply)
         case "d":
             args := &delegateproto.DeleteArgs{}
@@ -137,7 +142,7 @@ func main() {
     for _, value := range(serverRPC) {
         value.Close()
     }
-//    coordRPC.Close()
+   coordRPC.Close()
 
     fmt.Println("Libclient Finished")
 }

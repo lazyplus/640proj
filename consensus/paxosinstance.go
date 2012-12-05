@@ -1,19 +1,22 @@
 package consensus
 
 import (
-	"math/rand"
+	// "math/rand"
 	"../paxosproto"
-	"time"
+	// "time"
     "fmt"
 )
 
-func generate_random_number(PeerID int, numNodes int) int {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	return (r.Intn(10)*numNodes + PeerID)
+func generate_random_number(PeerID int, numNodes int, Nh int) int {
+	// r := rand.New(rand.NewSource(time.Now().UnixNano()))
+    fmt.Println("Generating MyN")
+    fmt.Println((Nh / 10 + 1) * 10 + PeerID)
+    return (Nh / 10 + 1) * 10 + PeerID
+	// return (r.Intn(10)*numNodes + PeerID)
 }
 
 type PaxosInstance struct {
-	log map[int] *paxosproto.ValueStruct
+	log *map[int] *paxosproto.ValueStruct
     out chan * paxosproto.Packet
     brd chan * paxosproto.Packet
     in chan * paxosproto.Packet	
@@ -33,6 +36,7 @@ type PaxosInstance struct {
     AcpacceptedNodes int
     AcpfailNodes int
     running bool
+    Finished bool
 }
 
 func NewPaxosInstance(peerID int, seq int, numNodes int) *PaxosInstance {
@@ -40,11 +44,9 @@ func NewPaxosInstance(peerID int, seq int, numNodes int) *PaxosInstance {
     pi.seq = seq
     pi.PeerID = peerID
     pi.numNodes = numNodes
-    pi.Myn = generate_random_number(peerID,numNodes)
     pi.prepareCh = make(chan * paxosproto.MsgStruct, 10)
     pi.acceptCh = make(chan * paxosproto.MsgStruct, 10)
     pi.running = true
-    go pi.Run()
     return pi
 }
 
@@ -128,7 +130,7 @@ func (pi *PaxosInstance) handlePrepare(pkt * paxosproto.Packet) {
         newPkt := pi.initPkt()
         newPkt.PeerID = pkt.PeerID
         newPkt.Msg.Type = paxosproto.PREPARE_BEHIND
-        newPkt.Msg.Va = pi.log[pkt.Msg.Seq]
+        newPkt.Msg.Va = (*pi.log)[pkt.Msg.Seq]
         pi.out <- newPkt
     }
     if msg.Na < pi.Nh {
@@ -175,16 +177,24 @@ func (pi *PaxosInstance) handleAccept(pkt * paxosproto.Packet) {
 
 func (pi *PaxosInstance) handleCommit(pkt * paxosproto.Packet) {
 	//receive commit, notify paxosengine to record the log and take action
+    pi.Finished = true
 	pi.prog <- pkt.Msg.Va
 }
 
 func (pi *PaxosInstance) Prepare() (int, * paxosproto.ValueStruct) {
+    pi.Myn = generate_random_number(pi.PeerID,pi.numNodes, pi.Nh)
     msg := &paxosproto.MsgStruct{}
     msg.Type = paxosproto.PREPARE
-    // msg.Na = pi.Myn
+    msg.Seq = pi.seq
+    msg.Na = pi.Myn
     newPkt := &paxosproto.Packet{pi.PeerID,msg}
+    fmt.Println("Sending prepare msg")
+    fmt.Println(newPkt.Msg)
     pi.brd <- newPkt 
+    fmt.Println("Waiting for prepare ok")
     p := <- pi.prepareCh //wait for the reply
+    fmt.Println("prepare done")
+    fmt.Println(p)
     var state int
     var v * paxosproto.ValueStruct = nil
     switch p.Type {
@@ -197,6 +207,9 @@ func (pi *PaxosInstance) Prepare() (int, * paxosproto.ValueStruct) {
     		state = paxosproto.PREPARE_BEHIND
     		v = p.Va
     }
+    fmt.Println("Returning ")
+    fmt.Println(state)
+    fmt.Println(v)
     return state, v
 }
 
@@ -205,6 +218,7 @@ func (pi * PaxosInstance) Accept(v *paxosproto.ValueStruct) int {
 	msg.Type = paxosproto.ACCEPT
 	msg.Na = pi.Myn
 	msg.Va = v
+    msg.Seq = pi.seq
 	newPkt := &paxosproto.Packet{pi.PeerID,msg}
 	pi.brd <- newPkt
 	p := <- pi.acceptCh
@@ -221,6 +235,7 @@ func (pi * PaxosInstance) Commit() {
 	msg := &paxosproto.MsgStruct{}
 	msg.Type = paxosproto.COMMIT
 	msg.Va = pi.Va
+    msg.Seq = pi.seq
 	newPkt := &paxosproto.Packet{pi.PeerID,msg}
 	pi.brd <- newPkt
 }

@@ -60,7 +60,7 @@ func ReadConfigFile (path string) (*Config, error) {
     }
 
     line, err = rf.ReadString('\n')
-    conf.CoordHostPort = line
+    conf.CoordHostPort = strings.TrimSpace(line)
 
     return conf, nil
 }

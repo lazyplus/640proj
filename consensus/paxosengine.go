@@ -78,7 +78,7 @@ func NewPaxosEngine(path string, airline_name string, ID int) *PaxosEngine {
 	pe.in = make(chan * paxosproto.Packet, 10)
 	pe.out = make(chan * paxosproto.Packet, 10)
 	pe.brd = make(chan * paxosproto.Packet, 10)
-	pe.prog = make(chan * paxosproto.ValueStruct, 10)
+	pe.prog = make(chan * paxosproto.ValueStruct)
 	pe.exitCurrentPI = make(chan int, 10)
 	pe.exitThisEngine = make(chan int, 10)
 	pe.cur_paxos = NewPaxosInstance( ID , pe.cur_seq ,len_list )
@@ -86,8 +86,10 @@ func NewPaxosEngine(path string, airline_name string, ID int) *PaxosEngine {
 	pe.cur_paxos.out = pe.out
 	pe.cur_paxos.brd = pe.brd
 	pe.cur_paxos.prog = pe.prog
-	pe.cur_paxos.log = pe.log
+	pe.cur_paxos.log = &pe.log
 	pe.cur_paxos.shouldExit = pe.exitCurrentPI
+    go pe.cur_paxos.Run()
+
 	go pe.run()
 	rpc.Register(pe)
 	rpc.HandleHTTP()
@@ -150,10 +152,14 @@ func (pe *PaxosEngine) run() {
 }
 
 func (pe *PaxosEngine) progress(V *paxosproto.ValueStruct) interface{} {
+    pe.mutex.Lock()
+    defer pe.mutex.Unlock()
+
     reply, err := pe.as.Progress(V)
     // V.reply = make([]byte, len(reply))
     // copy(V.reply, reply)
     fmt.Println("after airline sever's progress")
+    pe.log[pe.cur_seq] = V
     pe.cur_seq ++
 //    pe.cur_paxos.running = false
 	pe.exitCurrentPI <- 1
@@ -167,8 +173,9 @@ func (pe *PaxosEngine) progress(V *paxosproto.ValueStruct) interface{} {
 	pe.cur_paxos.out = pe.out
 	pe.cur_paxos.brd = pe.brd
 	pe.cur_paxos.prog = pe.prog
-	pe.cur_paxos.log = pe.log
+	pe.cur_paxos.log = &pe.log
 	pe.cur_paxos.shouldExit = pe.exitCurrentPI
+    go pe.cur_paxos.Run()
 	fmt.Println("after init a new PI")
     if err != nil {
         fmt.Println(err)
@@ -184,7 +191,6 @@ func (pe *PaxosEngine) progress(V *paxosproto.ValueStruct) interface{} {
     V.Reply = make([]byte, len(buf))
     copy(V.Reply, buf)
     
-	pe.log[pe.cur_seq] = V
 	
 	fmt.Println("after successfully write into log")
 	
@@ -205,6 +211,11 @@ func (pe * PaxosEngine) checkLog(V * paxosproto.ValueStruct) (bool,int) {
 func (pe *PaxosEngine) Propose(V * paxosproto.ValueStruct, reply * paxosproto.ReplyStruct) error {
     pe.mutex.Lock()
     defer pe.mutex.Unlock()
+
+    if pe.cur_paxos.Finished {
+        reply = nil
+        return nil
+    }
 
     fmt.Println("Propose Called")
     fmt.Println(V)
@@ -229,9 +240,12 @@ func (pe *PaxosEngine) Propose(V * paxosproto.ValueStruct, reply * paxosproto.Re
     for {
         fmt.Println("preparing")
         Status, Vp = pe.cur_paxos.Prepare()
+        fmt.Println("Prepare returned")
         if Status == paxosproto.PREPARE_BEHIND {
             //pe.ReqProgress(Vp)
-            pe.progress(Vp)
+            // pe.progress(Vp)
+            pe.prog <- Vp
+            // return
         } else {
             break
         }
@@ -259,7 +273,7 @@ func (pe *PaxosEngine) Propose(V * paxosproto.ValueStruct, reply * paxosproto.Re
     pe.cur_paxos.Commit() 
     fmt.Println("{Progessing}")
 //    rpl := pe.progress(Vp)
-	pe.prog <- Vp	 
+	// pe.prog <- Vp	 
  	reply.Status = paxosproto.Propose_RETRY
  	return nil
     

@@ -1,2 +1,2 @@
-go run coordserver/coordserver.go -port 12350 &
+go run coordserver/coordserver.go -port 12400 &
 
