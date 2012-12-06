@@ -119,7 +119,7 @@ func (pe *PaxosEngine) sendMsg(msg *paxosproto.Packet, id int) error {
     // fmt.Println("sending pkt to " + hostport)
     host := strings.Split(pe.conf.Airlines[pe.name].PeersHostPort[id], ":")[0]
 
-    addr, err := net.ResolveUDPAddr("udp4", host + ":" + strconv.FormatInt(int64(pe.conf.Airlines[pe.name].UDPPort[id]), 10))
+    addr, err := net.ResolveUDPAddr("udp", host + ":" + strconv.FormatInt(int64(pe.conf.Airlines[pe.name].UDPPort[id]), 10))
     if err != nil {
         fmt.Println(err)
         return err

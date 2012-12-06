@@ -246,6 +246,9 @@ func (pi *PaxosInstance) handleCommit(pkt * paxosproto.Packet) {
 }
 
 func (pi *PaxosInstance) Prepare() (int, * paxosproto.ValueStruct) {
+    pi.PreaccepteNodes = 0
+    pi.PrefailNodes = 0
+    
     pi.Myn = generate_random_number(pi.PeerID,pi.numNodes, pi.Nh)
     msg := &paxosproto.MsgStruct{}
     msg.Type = paxosproto.PREPARE
@@ -288,6 +291,9 @@ func (pi *PaxosInstance) Prepare() (int, * paxosproto.ValueStruct) {
 }
 
 func (pi * PaxosInstance) Accept(v *paxosproto.ValueStruct) int {
+    pi.AcpacceptedNodes = 0
+    pi.AcpfailNodes = 0
+
 	msg := &paxosproto.MsgStruct{}
 	msg.Type = paxosproto.ACCEPT
 	msg.Na = pi.Myn

@@ -37,7 +37,7 @@ func (h *iNetworkHandler) Dial(service string) error {
 
 // Listen on port
 func (h *iNetworkHandler) Listen(port int) error {
-    server := "127.0.0.1:" + strconv.FormatInt(int64(port), 10)
+    server := "128.237.129.55:" + strconv.FormatInt(int64(port), 10)
     fmt.Println("UDP Listened on " + server)
     addr, err := net.ResolveUDPAddr("udp4", server)
     if err != nil {
