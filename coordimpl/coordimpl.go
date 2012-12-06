@@ -33,7 +33,7 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 	<- co.work_slot
 	defer co.returnSlot()
 	//2pc
-	//assume the flight ID is in format: airline + "::" + ID 
+	//assume the flight ID is in format: airline + "-" + ID 
 
 	co.map_lock.Lock()
 	co.coordSeq ++ 
@@ -81,8 +81,7 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 	this_coordseq = co.coordSeq
 	co.map_lock.Unlock()
 	//second phase
-	// wait_ls2 := make(map[string] *rpc.Call)
-	// reply_ls2 := make(map[string] *delegateproto.DecisionReply)
+
 	for e:=id_ls.Front();e!=nil;e=e.Next() {
 		ss := e.Value.(string)
 		client, _ := client_ls[ss]
@@ -97,9 +96,6 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 	}
 	
 	ori_reply.Status = finalstatus
-	// if shouldAbort {
-	// 	ori_reply.Status = coordproto.ENOFLIGHT
-	// }
 
 	return nil
 }
@@ -107,9 +103,7 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 func (co *coordserver) CancelFlights(args *coordproto.BookArgs, ori_reply *coordproto.BookReply) error {
 	<- co.work_slot
 	defer co.returnSlot()
-	// co.map_lock.Lock()
-	// defer co.map_lock.Unlock()
-	
+
 	co.map_lock.Lock()
 	co.coordSeq ++ 
 	this_coordseq := co.coordSeq
@@ -117,10 +111,9 @@ func (co *coordserver) CancelFlights(args *coordproto.BookArgs, ori_reply *coord
 
 	ls := len(args.Flights)
 	id_ls := list.New()
-	// wait_ls := make(map[string] *rpc.Call)
-	// reply_ls := make(map[string] *delegateproto.BookReply)
+
 	client_ls := make(map[string] *rpc.Client)
-	//assume the input is airline + "::" + ID
+	//assume the input is airline + "-" + ID
 	var shouldAbort bool = false
 	var should_commit int = delegateproto.COMMIT
 	var final_status int = coordproto.OK
@@ -154,8 +147,6 @@ func (co *coordserver) CancelFlights(args *coordproto.BookArgs, ori_reply *coord
 	this_coordseq = co.coordSeq
 	co.map_lock.Unlock()
 	//second phase
-	// wait_ls2 := make(map[string] *rpc.Call)
-	// reply_ls2 := make(map[string] *delegateproto.DecisionReply)
 
 	for e:=id_ls.Front();e!=nil;e=e.Next() {
 		ss := e.Value.(string)
@@ -181,8 +172,7 @@ func (co *coordserver) CancelFlights(args *coordproto.BookArgs, ori_reply *coord
 func (co *coordserver) QueryFlights(args * coordproto.QueryArgs, reply * coordproto.QueryReply) error {
 	<- co.work_slot
 	defer co.returnSlot()
-	// fmt.Println("QueryFlights")
-	
+
 	co.map_lock.Lock()
 	co.coordSeq ++
 	this_coordseq := co.coordSeq

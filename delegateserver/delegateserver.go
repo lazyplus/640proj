@@ -1,9 +1,9 @@
 package main
 
 import (
-    "runtime"
-	"../delegateimpl"
+    "../delegateimpl"
     "../delegateproto"
+    "runtime"
     "flag"
     "net"
     "fmt"

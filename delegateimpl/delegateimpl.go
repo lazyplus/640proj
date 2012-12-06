@@ -1,12 +1,12 @@
 package delegateimpl
 
 import (
-	"time"
-    "fmt"
-    "net/rpc"
     "../paxosproto"
     "../config"
     "../delegateproto"
+	"time"
+    "fmt"
+    "net/rpc"
     "encoding/json"
     "math/rand"
 )
