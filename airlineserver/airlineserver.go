@@ -206,6 +206,7 @@ func (as *AirlineServer) PrepareBookFlight(args *delegateproto.BookArgs) (*deleg
     flight := as.getFlight(args.FlightID)
 
     if flight == nil {
+        fmt.Println("cannot find flight")
         reply.Status = delegateproto.ENOFLIGHT
         return reply, nil
     }
@@ -218,7 +219,7 @@ func (as *AirlineServer) PrepareBookFlight(args *delegateproto.BookArgs) (*deleg
         // return reply, nil
     }
 
-    // fmt.Println("acquiring lock of " + args.FlightID)
+    fmt.Println("acquiring lock of " + args.FlightID)
 
     /// WATCHOUT
     flight.preparedAction = args
@@ -252,7 +253,7 @@ func (as *AirlineServer) BookDecision(args *delegateproto.DecisionArgs) (*delega
         return reply, nil
     }
 
-    // fmt.Println("releasing lock of " + args.FlightID)
+    fmt.Println("releasing lock of " + args.FlightID)
     defer flight.mutex.Unlock()
 
     act := flight.preparedAction

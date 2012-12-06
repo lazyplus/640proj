@@ -13,6 +13,7 @@ import (
     "sync"
     "strings"
     "strconv"
+    // "time"
 )
 
 type PaxosEngine struct {
@@ -31,6 +32,7 @@ type PaxosEngine struct {
 	prog chan * paxosproto.ValueStruct 	
 	exitCurrentPI chan int
 	exitThisEngine chan int
+    behind bool
     peerID int
     // airlineserver
     as *airlineserver.AirlineServer
@@ -79,7 +81,7 @@ func NewPaxosEngine(path string, airline_name string, ID int) *PaxosEngine {
 	pe.in = make(chan * paxosproto.Packet, 10)
 	pe.out = make(chan * paxosproto.Packet, 10)
 	pe.brd = make(chan * paxosproto.Packet, 10)
-	pe.prog = make(chan * paxosproto.ValueStruct)
+	pe.prog = make(chan * paxosproto.ValueStruct, 10)
 	pe.exitCurrentPI = make(chan int, 10)
 	pe.exitThisEngine = make(chan int, 10)
 	pe.cur_paxos = NewPaxosInstance( ID , pe.cur_seq ,len_list )
@@ -88,9 +90,11 @@ func NewPaxosEngine(path string, airline_name string, ID int) *PaxosEngine {
 	pe.cur_paxos.brd = pe.brd
 	pe.cur_paxos.prog = pe.prog
 	pe.cur_paxos.log = &pe.log
+    pe.cur_paxos.mutex = &pe.mutex
 	pe.cur_paxos.shouldExit = &pe.exitCurrentPI
     go pe.cur_paxos.Run()
 
+    pe.behind = false
 	go pe.run()
 	rpc.Register(pe)
 	rpc.HandleHTTP()
@@ -129,18 +133,15 @@ func (pe *PaxosEngine) run() {
         select{
         case inPkt := <- pe.in:
             pe.cur_paxos.in <- inPkt
+
         case outPkt := <- pe.out:
             pe.sendMsg(outPkt, outPkt.PeerID)
 
         case brdMSg := <- pe.brd:
             for i:=0; i<pe.conf.Airlines[pe.name].NumPeers; i++ {
                 pe.sendMsg(brdMSg, i)
-                // var reply int
-                // client, err := rpc.DialHTTP("tcp",addr)/
-                // if err == nil {
-                    
-                // }
             }
+
         case Va := <- pe.prog:
 //            req.reply <- pe.progress(req.Msg.Va)		//reply to where?
 //			  pe.progress(req.Msg.Va)
@@ -161,17 +162,9 @@ func (pe *PaxosEngine) progress(V *paxosproto.ValueStruct) interface{} {
         fmt.Println("Warning: Progressing nil")
     }
 
+    fmt.Println("progressing", pe.cur_seq, V)
     reply, err := pe.as.Progress(V)
-    // V.reply = make([]byte, len(reply))
-    // copy(V.reply, reply)
-    // fmt.Println("after airline sever's progress")
-    // if err != nil {
-    //     fmt.Println(err)
-    //     nop_v := &paxosproto.ValueStruct{}
-    //     nop_v.Type = paxosproto.C_NOP
-    //     // pe.log[pe.cur_seq] = nop_v
-    //     return nil
-    // }
+
     if err == nil {
         buf, err := json.Marshal(reply)
         if err != nil {
@@ -198,6 +191,7 @@ func (pe *PaxosEngine) progress(V *paxosproto.ValueStruct) interface{} {
 	pe.cur_paxos.brd = pe.brd
 	pe.cur_paxos.prog = pe.prog
 	pe.cur_paxos.log = &pe.log
+    pe.cur_paxos.mutex = &pe.mutex
 	pe.cur_paxos.shouldExit = &pe.exitCurrentPI
     go pe.cur_paxos.Run()
 	// fmt.Println("after init a new PI")
@@ -212,7 +206,7 @@ func (pe * PaxosEngine) checkLog(V * paxosproto.ValueStruct) (bool,int) {
 	//no need to lock
 	// fmt.Println("cehcking log")
 	for key, value := range(pe.log) {
-		if value.CoordSeq == V.CoordSeq {
+		if value.Type == V.Type && value.CoordSeq == V.CoordSeq {
 			return true, key
 		}
 	}
@@ -220,6 +214,12 @@ func (pe * PaxosEngine) checkLog(V * paxosproto.ValueStruct) (bool,int) {
 }
 
 func (pe *PaxosEngine) Propose(V * paxosproto.ValueStruct, reply * paxosproto.ReplyStruct) error {
+    // ProgV, ok := <- pe.prog
+    // if ok {
+    //     pe.prog <- ProgV
+    //     time.Sleep(10 * time.Millisecond)
+    // }
+
     pe.mutex.Lock()
     defer pe.mutex.Unlock()
 
@@ -228,7 +228,7 @@ func (pe *PaxosEngine) Propose(V * paxosproto.ValueStruct, reply * paxosproto.Re
         return nil
     }
 
-    // fmt.Println("Propose Called")
+    fmt.Println("Propose Called", pe.cur_seq, V.Type)
 
     //check log
     found, index := pe.checkLog(V)
@@ -248,19 +248,22 @@ func (pe *PaxosEngine) Propose(V * paxosproto.ValueStruct, reply * paxosproto.Re
     var Vp * paxosproto.ValueStruct
 
     for {
-        // fmt.Println(pe.cur_seq, "preparing")
+        fmt.Println(pe.cur_seq, "preparing")
         Status, Vp = pe.cur_paxos.Prepare()
         // fmt.Println("Prepare returned")
         if Status == paxosproto.PREPARE_BEHIND {
-            fmt.Println("Learning", pe.cur_seq)
+            pe.cur_paxos.Finished = true
+            pe.behind = true
+            fmt.Println("Learning", pe.cur_seq, Vp)
             pe.prog <- Vp
-            reply.Status = paxosproto.Propose_RETRY
+            reply.Status = paxosproto.Propose_LEARN
             return nil
         } else {
             break
         }
     }
     
+    pe.behind = false
     if Status == paxosproto.PREPARE_REJECT {
         fmt.Println(pe.cur_seq, "prepare rejected")
         reply.Status = paxosproto.Propose_FAIL
@@ -271,12 +274,7 @@ func (pe *PaxosEngine) Propose(V * paxosproto.ValueStruct, reply * paxosproto.Re
         Vp = V
     }
 
-    // if pe.as.Defer(Vp) {
-        // reply.Status = paxosproto.Propose_RETRY
-        // return nil
-    // }
-
-    // fmt.Println(pe.cur_seq, "sending accept")
+    fmt.Println(pe.cur_seq, "sending accept")
 
     OK := pe.cur_paxos.Accept(Vp)
     if OK == -1 {
@@ -284,10 +282,15 @@ func (pe *PaxosEngine) Propose(V * paxosproto.ValueStruct, reply * paxosproto.Re
         reply.Status = paxosproto.Propose_FAIL
         return nil
     }
+    if OK == paxosproto.ACCEPT_REJECT {
+        reply.Status = paxosproto.Propose_FAIL
+        return nil
+    }
 
     pe.cur_paxos.Commit(Vp)
-    fmt.Println(pe.cur_seq, "committing")    
+    fmt.Println(pe.cur_seq, "committing")
     pe.cur_paxos.Finished = true
+    pe.prog <- Vp
  	reply.Status = paxosproto.Propose_RETRY
  	return nil
 }

@@ -26,6 +26,7 @@ const (
 const (
 	Propose_OK = iota
 	Propose_RETRY
+    Propose_LEARN
 	Propose_FAIL
 )
 

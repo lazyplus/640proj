@@ -70,6 +70,7 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 		if reply.Status != delegateproto.OK || shouldAbort == true {
 			shouldCommit = delegateproto.ABORT
 			finalstatus = reply.Status
+			shouldAbort = true
 		}
 		id_ls.PushBack(id)
 		client_ls[id] = client	
@@ -180,21 +181,20 @@ func (co *coordserver) CancelFlights(args *coordproto.BookArgs, ori_reply *coord
 func (co *coordserver) QueryFlights(args * coordproto.QueryArgs, reply * coordproto.QueryReply) error {
 	<- co.work_slot
 	defer co.returnSlot()
-	// co.map_lock.Lock()
-	// defer co.map_lock.Unlock()
-
 	// fmt.Println("QueryFlights")
-	dargs := &delegateproto.QueryArgs{}
-
-	dargs.StartTime = args.StartTime
-	dargs.EndTime = args.EndTime
+	
 	co.map_lock.Lock()
 	co.coordSeq ++
 	this_coordseq := co.coordSeq
 	co.map_lock.Unlock()
-	dargs.Seqnum = this_coordseq
+
 	reply.FlightList = make([]delegateproto.FlightStruct, 0)
+
 	for _, value := range(co.airline_info.Airlines) {
+		dargs := &delegateproto.QueryArgs{}
+		dargs.Seqnum = this_coordseq
+		dargs.StartTime = args.StartTime
+		dargs.EndTime = args.EndTime
 		// fmt.Println("Querying airline " + key)
 		var dreply delegateproto.QueryReply
 		cli, err := rpc.DialHTTP("tcp", value.DelegateHostPort)

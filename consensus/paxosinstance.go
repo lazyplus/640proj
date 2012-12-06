@@ -3,8 +3,9 @@ package consensus
 import (
 	// "math/rand"
 	"../paxosproto"
-	// "time"
-    // "fmt"
+	"time"
+    "fmt"
+    "sync"
 )
 
 func generate_random_number(PeerID int, numNodes int, Nh int) int {
@@ -38,6 +39,7 @@ type PaxosInstance struct {
     running bool
     preparing bool
     Finished bool
+    mutex *sync.Mutex
 }
 
 func NewPaxosInstance(peerID int, seq int, numNodes int) *PaxosInstance {
@@ -68,6 +70,16 @@ func (pi *PaxosInstance) Run() {
 			if pi.running == false {
 				break
 			}
+
+            if inPkt.Msg.Seq > pi.seq {
+                msg := &paxosproto.MsgStruct{}
+                msg.Type = paxosproto.ACCEPT_REJECT
+                pi.acceptCh <- msg
+                msg2 := &paxosproto.MsgStruct{}
+                msg2.Type = paxosproto.PREPARE_REJECT
+                break
+            }
+
             if inPkt.Msg.Type == paxosproto.PREPARE {
                 pi.handlePrepare(inPkt)
                 break
@@ -83,15 +95,20 @@ func (pi *PaxosInstance) Run() {
             switch(inPkt.Msg.Type){
             case paxosproto.PREPARE_OK:
 				pi.PreaccepteNodes ++
-                // fmt.Println("Get prepare OK")
+                fmt.Println("Get prepare OK")
                 if pi.Na < inPkt.Msg.Na {
                     pi.Na = inPkt.Msg.Na
                     pi.Va = inPkt.Msg.Va
                 }
 				if (pi.PreaccepteNodes > (pi.numNodes/2)) {
-                    pi.prepareCh <- inPkt.Msg
+                    msg := &paxosproto.MsgStruct{}
+                    msg.Type = paxosproto.PREPARE_OK
+                    msg.Na = pi.Na
+                    msg.Va = pi.Va
+                    pi.prepareCh <- msg
 				}
             case paxosproto.PREPARE_REJECT:
+                fmt.Println("Get prepare rejected")
                 pi.PrefailNodes ++
                 if (pi.PrefailNodes > (pi.numNodes/2))  {
                      pi.prepareCh <- inPkt.Msg
@@ -129,10 +146,10 @@ func (pi *PaxosInstance) initPkt () *paxosproto.Packet {
 
 func (pi *PaxosInstance) handlePrepare(pkt * paxosproto.Packet) {
 	msg := pkt.Msg
-    // fmt.Println("Get prepare, my seq")
-    // fmt.Println(pi.seq)
-    // fmt.Println("msg seq is ")
-    // fmt.Println(pkt.Msg.Seq)
+    fmt.Println("Get prepare, my seq")
+    fmt.Println(pi.seq)
+    fmt.Println("msg seq is ")
+    fmt.Println(pkt.Msg.Seq)
     if pkt.Msg.Seq < pi.seq {
         // reply prepare behind
         newPkt := pi.initPkt()
@@ -142,10 +159,11 @@ func (pi *PaxosInstance) handlePrepare(pkt * paxosproto.Packet) {
         newPkt.Msg.Va = (*pi.log)[pkt.Msg.Seq]
         pi.out <- newPkt
         return
-    } else if pkt.Msg.Seq > pi.seq  {
+    } else if pkt.Msg.Seq > pi.seq {
         return
     }
 
+    fmt.Println("get prepare", msg.Na, pi.Nh)
     if msg.Na < pi.Nh {
         // reply prepare rejected
  		newPkt := pi.initPkt()
@@ -153,11 +171,11 @@ func (pi *PaxosInstance) handlePrepare(pkt * paxosproto.Packet) {
         newPkt.Msg.Type = paxosproto.PREPARE_REJECT
         pi.out <- newPkt
     }else {
-        if pi.preparing && msg.Na > pi.Myn {
-            rmsg := &paxosproto.MsgStruct{}
-            rmsg.Type = paxosproto.PREPARE_REJECT
-            pi.prepareCh <- rmsg
-        }
+        // if pi.preparing && msg.Na > pi.Myn {
+        //     rmsg := &paxosproto.MsgStruct{}
+        //     rmsg.Type = paxosproto.PREPARE_REJECT
+        //     pi.prepareCh <- rmsg
+        // }
         pi.Nh = msg.Na
         // reply prepare OK, Va
         newPkt := pi.initPkt()
@@ -173,18 +191,19 @@ func (pi *PaxosInstance) handleAccept(pkt * paxosproto.Packet) {
     // fmt.Println("Handling Accept")
     // fmt.Println(pkt)
 	msg := pkt.Msg
+
     if pkt.Msg.Seq < pi.seq {
         // reply prepare behind
         newPkt := pi.initPkt()
         newPkt.PeerID = pkt.PeerID
         newPkt.Msg.Seq = pkt.Msg.Seq
         newPkt.Msg.Type = paxosproto.ACCEPT_REJECT
-        newPkt.Msg.Va = (*pi.log)[pkt.Msg.Seq]
         pi.out <- newPkt
         return
     } else if pkt.Msg.Seq > pi.seq {
         return
     }
+
     if msg.Na < pi.Nh {
         // reply accept rejected
         newPkt := pi.initPkt()
@@ -207,13 +226,22 @@ func (pi *PaxosInstance) handleAccept(pkt * paxosproto.Packet) {
 
 func (pi *PaxosInstance) handleCommit(pkt * paxosproto.Packet) {
 	//receive commit, notify paxosengine to record the log and take action
-    pi.Finished = true
+    // fmt.Println("A lock commit")
+    // pi.mutex.Lock()
+    // defer pi.mutex.Unlock()
+    // fmt.Println("R lock commit")
+
+    fmt.Println(pi.seq, "be committed")
     msg := &paxosproto.MsgStruct{}
     msg.Type = paxosproto.ACCEPT_REJECT
     pi.acceptCh <- msg
     msg2 := &paxosproto.MsgStruct{}
     msg2.Type = paxosproto.PREPARE_REJECT
     pi.prepareCh <- msg2
+    if pi.Finished {
+        return
+    }
+    pi.Finished = true
 	pi.prog <- pkt.Msg.Va
 }
 
@@ -224,13 +252,21 @@ func (pi *PaxosInstance) Prepare() (int, * paxosproto.ValueStruct) {
     msg.Seq = pi.seq
     msg.Na = pi.Myn
     newPkt := &paxosproto.Packet{pi.PeerID,msg}
-    // fmt.Println("Sending prepare msg")
-    // fmt.Println(newPkt.Msg)
+    fmt.Println("Sending prepare msg")
+    fmt.Println(newPkt.Msg)
     pi.brd <- newPkt 
     pi.preparing = true
     // fmt.Println("Waiting for prepare ok")
-    p := <- pi.prepareCh //wait for the reply
-    pi.preparing = false
+
+
+    timer := time.NewTimer(2 * time.Second)
+    p := &paxosproto.MsgStruct{}
+    select{
+    case <- timer.C:
+        p.Type = paxosproto.PREPARE_REJECT
+    case p = <- pi.prepareCh:
+        timer.Stop()
+    }
     // fmt.Println("prepare done")
     // fmt.Println(p)
     var state int
@@ -259,7 +295,16 @@ func (pi * PaxosInstance) Accept(v *paxosproto.ValueStruct) int {
     msg.Seq = pi.seq
 	newPkt := &paxosproto.Packet{pi.PeerID,msg}
 	pi.brd <- newPkt
-	p := <- pi.acceptCh
+
+    timer := time.NewTimer(2 * time.Second)
+    p := &paxosproto.MsgStruct{}
+    select{
+    case <- timer.C:
+        p.Type = paxosproto.ACCEPT_REJECT
+    case p = <- pi.acceptCh:
+        timer.Stop()
+    }
+
 	switch p.Type {
 		case paxosproto.ACCEPT_OK:
 			return paxosproto.ACCEPT_OK	

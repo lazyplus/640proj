@@ -13,6 +13,12 @@ func (l *PLock) TryLock() bool {
     l.cnt_lock.Lock()
     defer l.cnt_lock.Unlock()
 
+    if l.cnt != 0 && l.cnt != 1{
+        a := 1 - 1
+        b := 1 / a
+        a = b
+    }
+
     if l.cnt == 0 {
         l.cnt ++
         return true
@@ -37,6 +43,15 @@ func (l *PLock) Unlock() {
     l.cnt_lock.Lock()
     defer l.cnt_lock.Unlock()
     
+    if l.cnt == 0 {
+        return
+    }
+    
     l.cnt --
+    if l.cnt != 0 {
+        a := 1 - 1
+        b := 1 / a
+        a = b
+    }
     return
 }

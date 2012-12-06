@@ -50,7 +50,7 @@ func main() {
     // config.DumpConfig(conf)
 
     var err error
-    fmt.Println(conf.CoordHostPort)
+    // fmt.Println(conf.CoordHostPort)
     var coordRPC *rpc.Client
     coordRPC, err = rpc.DialHTTP("tcp", conf.CoordHostPort)
     if err != nil {
@@ -67,28 +67,28 @@ func main() {
             args := &coordproto.AddArgs{}
             var reply coordproto.AddReply
             args.Flight = *flight
-            fmt.Println("Calling RPC")
+            // fmt.Println("Calling RPC")
             coordRPC.Call("CoordinatorRPC.AddFlight", args, &reply)
             fmt.Println(*args, reply)
         case "d":
-            args := &delegateproto.DeleteArgs{}
-            var reply delegateproto.DeleteReply
+            args := &coordproto.DeleteArgs{}
+            var reply coordproto.DeleteReply
             args.FlightID = flag.Arg(1)
             coordRPC.Call("CoordinatorRPC.DeleteFlight", args, &reply)
             fmt.Println(*args, reply)
         case "q":
-            args := &delegateproto.QueryArgs{}
+            args := &coordproto.QueryArgs{}
             parts := strings.Split(flag.Arg(1), ":")
             args.StartTime, _ = strconv.ParseInt(parts[0], 10, 64)
             args.EndTime, _ = strconv.ParseInt(parts[1], 10, 64)
-            var reply delegateproto.QueryReply
+            var reply coordproto.QueryReply
             coordRPC.Call("CoordinatorRPC.QueryFlights", args, &reply)
             fmt.Println("q", *args, reply)
         case "r":
             flightStr := flag.Arg(1)
             flight := parseFlight(flightStr)
-            args := &delegateproto.RescheduleArgs{}
-            var reply delegateproto.RescheduleReply
+            args := &coordproto.RescheduleArgs{}
+            var reply coordproto.RescheduleReply
             args.NewFlight = *flight
             args.OldFlightID = flight.FlightID
             coordRPC.Call("CoordinatorRPC.RescheduleFlight", args, &reply)
@@ -104,7 +104,7 @@ func main() {
                 flightID := parts[i+3]
                 args.Flights = append(args.Flights, flightID)
             }
-            fmt.Println(args.Flights)
+            // fmt.Println(args.Flights)
             var reply coordproto.BookReply
             coordRPC.Call("CoordinatorRPC.BookFlights", args, &reply)
             fmt.Println("b", *args, reply)
@@ -119,7 +119,7 @@ func main() {
                 flightID := parts[i+3]
                 args.Flights = append(args.Flights, flightID)
             }
-            fmt.Println(args.Flights)
+            // fmt.Println(args.Flights)
             var reply coordproto.BookReply
             coordRPC.Call("CoordinatorRPC.CancelFlights", args, &reply)
             fmt.Println("c", *args, reply)
@@ -128,5 +128,5 @@ func main() {
 
    coordRPC.Close()
 
-    fmt.Println("Libclient Finished")
+    // fmt.Println("Libclient Finished")
 }
