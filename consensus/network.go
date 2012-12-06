@@ -1,10 +1,9 @@
 package consensus
 
 import (
+    "../paxosproto"
     "net"
     "encoding/json"
-    "strconv"
-    "../paxosproto"
     "fmt"
 )
 
@@ -21,24 +20,9 @@ func (h *iNetworkHandler) Close() {
     h.conn.Close()
 }
 
-// Dial to server
-func (h *iNetworkHandler) Dial(service string) error {
-    addr, err := net.ResolveUDPAddr("udp4", service)
-    if err != nil {
-        return err
-    }
-    h.addr = addr
-    h.conn, err = net.DialUDP("udp4", nil, addr)
-    if err != nil {
-        return err
-    }
-    return nil
-}
-
 // Listen on port
-func (h *iNetworkHandler) Listen(port int) error {
-    server := "128.237.129.55:" + strconv.FormatInt(int64(port), 10)
-    fmt.Println("UDP Listened on " + server)
+func (h *iNetworkHandler) Listen(hostport string) error {
+    server := hostport
     addr, err := net.ResolveUDPAddr("udp4", server)
     if err != nil {
         fmt.Println(err)
@@ -73,7 +57,6 @@ func (h *iNetworkHandler) run() {
     buf := make([]byte, 2000)
     for {
         n, _, err := h.conn.ReadFromUDP(buf[0:])
-        // fmt.Println("Network Received")
         if err == nil {
             data := &paxosproto.Packet{}
             err := json.Unmarshal(buf[:n], data)

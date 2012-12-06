@@ -1,0 +1,13 @@
+a {{1-4 31 32 PIT SFO 10 10}} {0}
+q {31 40} {0 [{1-4 31 32 PIT SFO 10 10}]}
+q {0 0} {0 []}
+b {[1-4] Bob@Com.com 1 0} {0 0}
+b {[1-4] Bob@Com.com 10 0} {2 0}
+c {[1-4] Bob@Com.com 1 0} {0 0}
+b {[1-4] Bob@Com.com 2 0} {0 0}
+c {[1-4] Bob@Com.com 1 0} {0 0}
+c {[1-4] Bob@Com.com 2 0} {2 0}
+r {1-4 {1-4 33 34 PIT SFO 10 10}} {0 [Bob@Com.com]}
+q {31 32} {0 []}
+q {33 34} {0 [{1-4 33 34 PIT SFO 10 10}]}
+d {1-4} {0 [Bob@Com.com]}

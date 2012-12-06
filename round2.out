@@ -1,0 +1,8 @@
+a {{1-2 11 12 PIT SFO 10 10}} {0}
+q {11 20} {0 [{1-2 11 12 PIT SFO 10 10}]}
+q {0 0} {0 []}
+b {[1-2] Bob@Com.com 1 0} {0 0}
+c {[1-2] Bob@Com.com 1 0} {0 0}
+b {[1-2] Bob@Com.com 2 0} {0 0}
+c {[1-2] Bob@Com.com 1 0} {0 0}
+d {1-2} {0 [Bob@Com.com]}

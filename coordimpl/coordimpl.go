@@ -97,9 +97,9 @@ func (co *coordserver) BookFlights(args *coordproto.BookArgs, ori_reply *coordpr
 	}
 	
 	ori_reply.Status = finalstatus
-	if shouldAbort {
-		ori_reply.Status = coordproto.ENOFLIGHT
-	}
+	// if shouldAbort {
+	// 	ori_reply.Status = coordproto.ENOFLIGHT
+	// }
 
 	return nil
 }
@@ -211,10 +211,7 @@ func (co *coordserver) QueryFlights(args * coordproto.QueryArgs, reply * coordpr
 func (co *coordserver) DeleteFlight(args * coordproto.DeleteArgs, reply * coordproto.DeleteReply) error {
 	<- co.work_slot
 	defer co.returnSlot()
-	// co.map_lock.Lock()
-	// defer co.map_lock.Unlock()
 
-	// fmt.Println("DeleteFlight")
 	dargs := &delegateproto.DeleteArgs{}
 
 	dargs.FlightID = args.FlightID
@@ -223,7 +220,6 @@ func (co *coordserver) DeleteFlight(args * coordproto.DeleteArgs, reply * coordp
 	dargs.Seqnum = co.coordSeq
 	co.map_lock.Unlock()
 	
-	// fmt.Println("deleting flight " + args.FlightID)
 	asname := strings.Split(dargs.FlightID, "-")[0]
 	var dreply delegateproto.DeleteReply
 	cli, err := rpc.DialHTTP("tcp", co.airline_info.Airlines[asname].DelegateHostPort)
@@ -239,19 +235,17 @@ func (co *coordserver) DeleteFlight(args * coordproto.DeleteArgs, reply * coordp
 func (co *coordserver) RescheduleFlight(args * coordproto.RescheduleArgs, reply * coordproto.RescheduleReply) error {
 	<- co.work_slot
 	defer co.returnSlot()
-	// co.map_lock.Lock()
-	// defer co.map_lock.Unlock()
 
-	// fmt.Println("RescheduleFlight")
 	dargs := &delegateproto.RescheduleArgs{}
 	dargs.OldFlightID = args.OldFlightID
 	dargs.NewFlight = args.NewFlight
+
 	co.map_lock.Lock()
 	co.coordSeq ++
 	dargs.Seqnum = co.coordSeq
 	co.map_lock.Unlock()
+
 	asname := strings.Split(dargs.OldFlightID, "-")[0]
-	// fmt.Println("Adding to airline " + asname)
 	var dreply delegateproto.RescheduleReply
 	cli, err := rpc.DialHTTP("tcp", co.airline_info.Airlines[asname].DelegateHostPort)
 	if err == nil {
@@ -269,8 +263,6 @@ func (co *coordserver) AddFlight(args * coordproto.AddArgs, reply * coordproto.A
 	<- co.work_slot
 	defer co.returnSlot()
 
-	// fmt.Println("Adding Flight")
-	fmt.Println(args.Flight)
 	dargs := &delegateproto.AddArgs{}
 	dargs.Flight = args.Flight
 
@@ -280,7 +272,6 @@ func (co *coordserver) AddFlight(args * coordproto.AddArgs, reply * coordproto.A
 	co.map_lock.Unlock()
 
 	asname := strings.Split(dargs.Flight.FlightID, "-")[0]
-	// fmt.Println("Adding to airline " + asname)
 	var dreply delegateproto.AddReply
 	cli, err := rpc.DialHTTP("tcp", co.airline_info.Airlines[asname].DelegateHostPort)
 	if err == nil {

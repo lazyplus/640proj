@@ -8,12 +8,7 @@ import (
     "fmt"
     "strings"
     "strconv"
-    // "log"
-    // "net"
     "net/rpc"
-    // "net/http"
-    // "os"
-    // "time"
 )
 
 type FlightStruct struct {
@@ -49,10 +44,7 @@ func main() {
     conf, _ := config.ReadConfigFile(*configFile)
     // config.DumpConfig(conf)
 
-    var err error
-    // fmt.Println(conf.CoordHostPort)
-    var coordRPC *rpc.Client
-    coordRPC, err = rpc.DialHTTP("tcp", conf.CoordHostPort)
+    coordRPC, err := rpc.DialHTTP("tcp", conf.CoordHostPort)
     if err != nil {
         fmt.Printf("Could not connect to server %s, returning nil\n", conf.CoordHostPort)
         return
@@ -67,15 +59,16 @@ func main() {
             args := &coordproto.AddArgs{}
             var reply coordproto.AddReply
             args.Flight = *flight
-            // fmt.Println("Calling RPC")
             coordRPC.Call("CoordinatorRPC.AddFlight", args, &reply)
-            fmt.Println(*args, reply)
+            fmt.Println("a", *args, reply)
+
         case "d":
             args := &coordproto.DeleteArgs{}
             var reply coordproto.DeleteReply
             args.FlightID = flag.Arg(1)
             coordRPC.Call("CoordinatorRPC.DeleteFlight", args, &reply)
-            fmt.Println(*args, reply)
+            fmt.Println("d", *args, reply)
+
         case "q":
             args := &coordproto.QueryArgs{}
             parts := strings.Split(flag.Arg(1), ":")
@@ -84,6 +77,7 @@ func main() {
             var reply coordproto.QueryReply
             coordRPC.Call("CoordinatorRPC.QueryFlights", args, &reply)
             fmt.Println("q", *args, reply)
+
         case "r":
             flightStr := flag.Arg(1)
             flight := parseFlight(flightStr)
@@ -92,7 +86,8 @@ func main() {
             args.NewFlight = *flight
             args.OldFlightID = flight.FlightID
             coordRPC.Call("CoordinatorRPC.RescheduleFlight", args, &reply)
-            fmt.Println(*args, reply)
+            fmt.Println("r", *args, reply)
+
         case "b":
             argStr := flag.Arg(1)
             parts := strings.Split(argStr, ":")
@@ -104,10 +99,10 @@ func main() {
                 flightID := parts[i+3]
                 args.Flights = append(args.Flights, flightID)
             }
-            // fmt.Println(args.Flights)
             var reply coordproto.BookReply
             coordRPC.Call("CoordinatorRPC.BookFlights", args, &reply)
             fmt.Println("b", *args, reply)
+
         case "c":
             argStr := flag.Arg(1)
             parts := strings.Split(argStr, ":")
@@ -119,14 +114,10 @@ func main() {
                 flightID := parts[i+3]
                 args.Flights = append(args.Flights, flightID)
             }
-            // fmt.Println(args.Flights)
             var reply coordproto.BookReply
             coordRPC.Call("CoordinatorRPC.CancelFlights", args, &reply)
             fmt.Println("c", *args, reply)
         }
     }
-
-   coordRPC.Close()
-
-    // fmt.Println("Libclient Finished")
+    coordRPC.Close()
 }

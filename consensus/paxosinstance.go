@@ -1,19 +1,12 @@
 package consensus
 
 import (
-	// "math/rand"
 	"../paxosproto"
 	"time"
-    "fmt"
-    "sync"
 )
 
 func generate_random_number(PeerID int, numNodes int, Nh int) int {
-	// r := rand.New(rand.NewSource(time.Now().UnixNano()))
-    // fmt.Println("Generating MyN")
-    // fmt.Println((Nh / 10 + 1) * 10 + PeerID)
     return (Nh / 10 + 1) * 10 + PeerID
-	// return (r.Intn(10)*numNodes + PeerID)
 }
 
 type PaxosInstance struct {
@@ -25,6 +18,7 @@ type PaxosInstance struct {
     prepareCh chan * paxosproto.MsgStruct
     acceptCh chan * paxosproto.MsgStruct
     shouldExit *chan int
+
 	Na int
 	Nh int
 	Myn int
@@ -32,14 +26,14 @@ type PaxosInstance struct {
     seq int
     PeerID int
     numNodes int
+
     PreaccepteNodes int
     PrefailNodes int
     AcpacceptedNodes int
     AcpfailNodes int
+
     running bool
-    preparing bool
     Finished bool
-    mutex *sync.Mutex
 }
 
 func NewPaxosInstance(peerID int, seq int, numNodes int) *PaxosInstance {
@@ -54,31 +48,16 @@ func NewPaxosInstance(peerID int, seq int, numNodes int) *PaxosInstance {
 }
 
 func (pi *PaxosInstance) Run() {
-	// finishPrepare := false
-	// finishAccept := false
-	// finishCommit := false
-	
     for pi.running {
         select{
         case <- (*pi.shouldExit):
         	pi.running = false
-
         	break
+
         case inPkt := <- pi.in:
-            // fmt.Println("Received ")
-            // fmt.Println(inPkt)
 			if pi.running == false {
 				break
 			}
-
-            if inPkt.Msg.Seq > pi.seq {
-                msg := &paxosproto.MsgStruct{}
-                msg.Type = paxosproto.ACCEPT_REJECT
-                pi.acceptCh <- msg
-                msg2 := &paxosproto.MsgStruct{}
-                msg2.Type = paxosproto.PREPARE_REJECT
-                break
-            }
 
             if inPkt.Msg.Type == paxosproto.PREPARE {
                 pi.handlePrepare(inPkt)
@@ -89,33 +68,36 @@ func (pi *PaxosInstance) Run() {
                 pi.handleAccept(inPkt)
                 break
             }
+
             if inPkt.Msg.Seq != pi.seq {
                 break
             }
+
             switch(inPkt.Msg.Type){
             case paxosproto.PREPARE_OK:
 				pi.PreaccepteNodes ++
-                fmt.Println("Get prepare OK")
+                // fmt.Println("Get prepare OK")
                 if pi.Na < inPkt.Msg.Na {
                     pi.Na = inPkt.Msg.Na
                     pi.Va = inPkt.Msg.Va
                 }
 				if (pi.PreaccepteNodes > (pi.numNodes/2)) {
-                    msg := &paxosproto.MsgStruct{}
-                    msg.Type = paxosproto.PREPARE_OK
-                    msg.Na = pi.Na
-                    msg.Va = pi.Va
-                    pi.prepareCh <- msg
+                    // msg := &paxosproto.MsgStruct{}
+                    // msg.Type = paxosproto.PREPARE_OK
+                    // msg.Na = pi.Na
+                    // msg.Va = pi.Va
+                    // pi.prepareCh <- msg
+                    pi.prepareCh <- inPkt.Msg
 				}
             case paxosproto.PREPARE_REJECT:
-                fmt.Println("Get prepare rejected")
+                // fmt.Println("Get prepare rejected")
                 pi.PrefailNodes ++
                 if (pi.PrefailNodes > (pi.numNodes/2))  {
                      pi.prepareCh <- inPkt.Msg
                 }
             case paxosproto.PREPARE_BEHIND:
                 pi.Va = inPkt.Msg.Va
-				pi.prepareCh <- inPkt.Msg
+                pi.prepareCh <- inPkt.Msg
             
             case paxosproto.ACCEPT_OK:
                 // fmt.Println("Get ACCEPT_OK")
@@ -146,10 +128,10 @@ func (pi *PaxosInstance) initPkt () *paxosproto.Packet {
 
 func (pi *PaxosInstance) handlePrepare(pkt * paxosproto.Packet) {
 	msg := pkt.Msg
-    fmt.Println("Get prepare, my seq")
-    fmt.Println(pi.seq)
-    fmt.Println("msg seq is ")
-    fmt.Println(pkt.Msg.Seq)
+    // fmt.Println("Get prepare, my seq")
+    // fmt.Println(pi.seq)
+    // fmt.Println("msg seq is ")
+    // fmt.Println(pkt.Msg.Seq)
     if pkt.Msg.Seq < pi.seq {
         // reply prepare behind
         newPkt := pi.initPkt()
@@ -163,7 +145,7 @@ func (pi *PaxosInstance) handlePrepare(pkt * paxosproto.Packet) {
         return
     }
 
-    fmt.Println("get prepare", msg.Na, pi.Nh)
+    // fmt.Println("get prepare", msg.Na, pi.Nh)
     if msg.Na < pi.Nh {
         // reply prepare rejected
  		newPkt := pi.initPkt()
@@ -171,11 +153,6 @@ func (pi *PaxosInstance) handlePrepare(pkt * paxosproto.Packet) {
         newPkt.Msg.Type = paxosproto.PREPARE_REJECT
         pi.out <- newPkt
     }else {
-        // if pi.preparing && msg.Na > pi.Myn {
-        //     rmsg := &paxosproto.MsgStruct{}
-        //     rmsg.Type = paxosproto.PREPARE_REJECT
-        //     pi.prepareCh <- rmsg
-        // }
         pi.Nh = msg.Na
         // reply prepare OK, Va
         newPkt := pi.initPkt()
@@ -226,21 +203,10 @@ func (pi *PaxosInstance) handleAccept(pkt * paxosproto.Packet) {
 
 func (pi *PaxosInstance) handleCommit(pkt * paxosproto.Packet) {
 	//receive commit, notify paxosengine to record the log and take action
-    // fmt.Println("A lock commit")
-    // pi.mutex.Lock()
-    // defer pi.mutex.Unlock()
-    // fmt.Println("R lock commit")
-
-    fmt.Println(pi.seq, "be committed")
-    msg := &paxosproto.MsgStruct{}
-    msg.Type = paxosproto.ACCEPT_REJECT
-    pi.acceptCh <- msg
-    msg2 := &paxosproto.MsgStruct{}
-    msg2.Type = paxosproto.PREPARE_REJECT
-    pi.prepareCh <- msg2
     if pi.Finished {
         return
     }
+    // fmt.Println(pi.seq, "be committed")
     pi.Finished = true
 	pi.prog <- pkt.Msg.Va
 }
@@ -248,21 +214,16 @@ func (pi *PaxosInstance) handleCommit(pkt * paxosproto.Packet) {
 func (pi *PaxosInstance) Prepare() (int, * paxosproto.ValueStruct) {
     pi.PreaccepteNodes = 0
     pi.PrefailNodes = 0
-    
     pi.Myn = generate_random_number(pi.PeerID,pi.numNodes, pi.Nh)
+
     msg := &paxosproto.MsgStruct{}
     msg.Type = paxosproto.PREPARE
     msg.Seq = pi.seq
     msg.Na = pi.Myn
     newPkt := &paxosproto.Packet{pi.PeerID,msg}
-    fmt.Println("Sending prepare msg")
-    fmt.Println(newPkt.Msg)
-    pi.brd <- newPkt 
-    pi.preparing = true
-    // fmt.Println("Waiting for prepare ok")
+    pi.brd <- newPkt
 
-
-    timer := time.NewTimer(2 * time.Second)
+    timer := time.NewTimer(200 * time.Millisecond)
     p := &paxosproto.MsgStruct{}
     select{
     case <- timer.C:
@@ -270,23 +231,19 @@ func (pi *PaxosInstance) Prepare() (int, * paxosproto.ValueStruct) {
     case p = <- pi.prepareCh:
         timer.Stop()
     }
-    // fmt.Println("prepare done")
-    // fmt.Println(p)
+
     var state int
     var v * paxosproto.ValueStruct = nil
     switch p.Type {
     	case paxosproto.PREPARE_OK:
     		state = paxosproto.PREPARE_OK
-    		v = p.Va
+    		v = pi.Va
     	case paxosproto.PREPARE_REJECT:
  			state = paxosproto.PREPARE_REJECT   	
     	case paxosproto.PREPARE_BEHIND:
     		state = paxosproto.PREPARE_BEHIND
-    		v = p.Va
+    		v = pi.Va
     }
-    // fmt.Println("Returning ")
-    // fmt.Println(state)
-    // fmt.Println(v)
     return state, v
 }
 
@@ -302,7 +259,7 @@ func (pi * PaxosInstance) Accept(v *paxosproto.ValueStruct) int {
 	newPkt := &paxosproto.Packet{pi.PeerID,msg}
 	pi.brd <- newPkt
 
-    timer := time.NewTimer(2 * time.Second)
+    timer := time.NewTimer(200 * time.Millisecond)
     p := &paxosproto.MsgStruct{}
     select{
     case <- timer.C:
@@ -317,7 +274,7 @@ func (pi * PaxosInstance) Accept(v *paxosproto.ValueStruct) int {
 		case paxosproto.ACCEPT_REJECT:
 			return paxosproto.ACCEPT_REJECT
 	}
-	return -1	//error is -1
+	return paxosproto.ACCEPT_REJECT
 }
 
 func (pi * PaxosInstance) Commit(v *paxosproto.ValueStruct) {

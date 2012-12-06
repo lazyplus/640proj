@@ -8,6 +8,7 @@ import (
     "../config"
     "../delegateproto"
     "encoding/json"
+    "math/rand"
 )
 
 type Delegate struct {
@@ -26,7 +27,8 @@ func NewDelegate(path string, airline_name string) *Delegate {
 }
 
 func (dg *Delegate) Push(V * paxosproto.ValueStruct) *paxosproto.ReplyStruct{
-    for index := 0; ; index = (index + 1) % dg.conf.NumPeers {
+    r := rand.New(rand.NewSource(time.Now().UnixNano()))
+    for index := r.Intn(dg.conf.NumPeers); ; index = (index + 1) % dg.conf.NumPeers {
 		reply := &paxosproto.ReplyStruct{}
         client, err := rpc.DialHTTP("tcp", dg.conf.PeersHostPort[index])
         if err != nil {

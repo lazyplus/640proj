@@ -1,6 +1,6 @@
-#go run peer/peer.go -id 0 -name 1 2>&1 | tee log1_0 &
-#P1=$!
-#echo $P1
+go run peer/peer.go -id 0 -name 1 2>&1 | tee log1_0 &
+P1=$!
+echo $P1
 go run peer/peer.go -id 1 -name 1 2>&1 | tee log1_1 &
 go run peer/peer.go -id 2 -name 1 2>&1 | tee log1_2 &
 

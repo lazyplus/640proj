@@ -245,9 +245,6 @@ func (as *AirlineServer) BookDecision(args *delegateproto.DecisionArgs) (*delega
 
     flight := as.getFlight(args.FlightID)
 
-    
-    // fmt.Println(flight)
-
     if flight == nil {
         reply.Status = delegateproto.ENOFLIGHT
         return reply, nil
@@ -409,7 +406,7 @@ func (as *AirlineServer) AddFlight(args *delegateproto.AddArgs) (*delegateproto.
     reply.Seqnum = args.Seqnum
 
     flight := as.getFlight(args.Flight.FlightID)
-    if flight != nil {
+    if flight != nil && !flight.deleted {
         reply.Status = delegateproto.EFLIGHTEXISTS
         return reply, nil
     }

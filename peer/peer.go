@@ -1,8 +1,8 @@
 package main
 
 import(
-    "flag"
     "../consensus"
+    "flag"
     "time"
     "runtime"
 )
